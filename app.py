@@ -1,89 +1,99 @@
 import streamlit as st
 import pandas as pd
+import os
 
 # Configuração da Página
 st.set_page_config(page_title="Precificador", layout="wide")
 
-# Estilização CSS personalizada
+# Estilização CSS
 st.markdown("""
     <style>
-    /* Título Principal */
-    .titulo-planilha { 
-        color: #1e3a8a; 
-        font-weight: bold; 
-        border-bottom: 2px solid #1e3a8a; 
-        margin-bottom: 20px; 
-    }
-    
-    /* QUADRADO DE RESULTADO - Cinza Escuro conforme solicitado */
-    .resultado-box { 
-        background-color: #262730; 
-        padding: 25px; 
-        border-radius: 15px; 
-        border-left: 10px solid #1e3a8a; 
-        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
-        color: white; /* Garante que o texto dentro dele seja branco */
-    }
-
-    /* Forçando as cores dos textos dentro da box escura */
-    .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b {
-        color: white !important;
-    }
-
-    /* A tabela (stTable) NÃO foi alterada no CSS para permanecer original */
+    .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
+    .resultado-box { background-color: #262730; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 15px rgba(0,0,0,0.3); color: white; }
+    .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-def carregar_banco():
+# --- FUNÇÕES DE BANCO DE DADOS ---
+def carregar_ingredientes():
     try:
         df = pd.read_csv("ingredientes.csv")
         df.columns = df.columns.str.strip().str.lower()
         return df
-    except Exception:
+    except:
         return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
+def carregar_receitas():
+    if os.path.exists("receitas_salvas.csv"):
+        return pd.read_csv("receitas_salvas.csv")
+    return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
+
+def salvar_receita_csv(nome, lista_itens):
+    df_nova = pd.DataFrame(lista_itens)
+    df_nova['nome_receita'] = nome
+    if os.path.exists("receitas_salvas.csv"):
+        df_antiga = pd.read_csv("receitas_salvas.csv")
+        # Remove versão antiga da mesma receita se existir
+        df_antiga = df_antiga[df_antiga['nome_receita'] != nome]
+        df_final = pd.concat([df_antiga, df_nova], ignore_index=True)
+    else:
+        df_final = df_nova
+    df_final.to_csv("receitas_salvas.csv", index=False)
+
 def main():
-    df_db = carregar_banco()
+    df_ing = carregar_ingredientes()
+    df_rec = carregar_receitas()
 
     st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
 
+    # --- ABA DE SELEÇÃO DE RECEITA PRENTA ---
+    with st.expander("📂 Abrir Receita Salva"):
+        receitas_nomes = df_rec['nome_receita'].unique().tolist()
+        receita_escolhida = st.selectbox("Escolha uma receita para carregar:", [""] + receitas_nomes)
+        if st.button("Carregar Dados"):
+            if receita_escolhida != "":
+                dados_rec = df_rec[df_rec['nome_receita'] == receita_escolhida]
+                st.session_state.nome_prod = receita_escolhida
+                st.session_state.n_itens = len(dados_rec)
+                for idx, row in enumerate(dados_rec.itertuples()):
+                    st.session_state[f"nome_{idx}"] = row.ingrediente
+                    st.session_state[f"qtd_{idx}"] = float(row.qtd)
+                    st.session_state[f"u_{idx}"] = row.unid
+                st.rerun()
+
     # --- SEÇÃO DO PRODUTO ---
     col_prod1, col_prod2 = st.columns([2, 1])
-    
     with col_prod1:
-        nome_produto_final = st.text_input("Nome do Produto Final:", value="", placeholder="Ex: Bolo de Chocolate")
-    
+        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
     with col_prod2:
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
 
     st.divider()
 
-    if df_db.empty:
-        st.error("⚠️ Arquivo 'ingredientes.csv' não encontrado no GitHub.")
+    if df_ing.empty:
+        st.error("⚠️ Arquivo 'ingredientes.csv' não encontrado.")
         return
 
     # --- MONTAGEM DA RECEITA ---
     col_esq, col_dir = st.columns([2, 1])
-
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, max_value=50, value=1)
+        n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, value=1, key="n_itens")
         
         custo_ingredientes_total = 0.0
+        lista_para_salvar = []
 
         for i in range(int(n_itens)):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
-            
             with c1:
-                escolha = st.selectbox(f"Item {i+1}", options=df_db['nome'].tolist(), key=f"nome_{i}")
+                escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
             
-            dados_item = df_db[df_db['nome'] == escolha].iloc[0]
+            dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
             unid_base = str(dados_item['unidade']).lower().strip()
             preco_base = float(dados_item['preco'])
 
             with c2:
                 qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01)
-            
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
 
@@ -95,11 +105,13 @@ def main():
             
             custo_parcial = (qtd_usada * fator) * preco_base
             custo_ingredientes_total += custo_parcial
+            
+            # Guardar para caso o usuário queira salvar a receita
+            lista_para_salvar.append({"ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
 
             with c4:
                 st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
-    # --- ADICIONAIS ---
     with col_dir:
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
@@ -116,18 +128,23 @@ def main():
     # --- EXIBIÇÃO ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
-
     with res1:
-        # A tabela mantém o comportamento original do Streamlit (branca)
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
             "Item": ["Ingredientes", "Quebra", "Despesas", "Embalagem", "TOTAL CUSTO"],
             "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}"]
         })
         st.table(df_resumo)
+        
+        # Botão para Salvar a Receita
+        if st.button("💾 Salvar esta Receita"):
+            if nome_produto_final:
+                salvar_receita_csv(nome_produto_final, lista_para_salvar)
+                st.success(f"Receita '{nome_produto_final}' salva com sucesso!")
+            else:
+                st.error("Dê um nome ao produto antes de salvar.")
 
     with res2:
-        # Apenas este quadrado fica cinza escuro
         st.markdown(f"""
         <div class='resultado-box'>
             <p style='margin:0; font-size:14px; opacity: 0.8;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
