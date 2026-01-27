@@ -1,108 +1,142 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="Precificador Pro - Doces", layout="wide")
+# Configuração da Página
+st.set_page_config(page_title="Precificador Pro - Doces & Salgados", layout="wide")
 
-# Estilização para o layout ficar profissional
+# Estilização CSS para visual Profissional
 st.markdown("""
     <style>
     .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
-    .resultado-box { background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #1e3a8a; }
+    .resultado-box { background-color: #f0f2f6; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
+    .stTable { background-color: white; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
+# 1. FUNÇÃO PARA CARREGAR O BANCO DE DADOS (CSV)
+def carregar_banco():
+    try:
+        # Lê o arquivo CSV que você subiu no GitHub
+        df = pd.read_csv("ingredientes.csv")
+        # Garante que as colunas estejam limpas
+        df.columns = df.columns.str.strip().str.lower()
+        return df
+    except Exception as e:
+        # Caso o arquivo não exista ou esteja errado, mostra um aviso e usa um padrão
+        st.error(f"Erro ao carregar 'ingredientes.csv': {e}")
+        return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
+
 def main():
-    st.markdown("<h1 class='titulo-planilha'>OVO DE COLHER AO LEITE - SISTEMA DE PRECIFICAÇÃO</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='titulo-planilha'>SISTEMA DE PRECIFICAÇÃO PROFISSIONAL</h1>", unsafe_allow_html=True)
 
-    # 1. Base de Ingredientes (Simulada)
-    if 'ingredientes' not in st.session_state:
-        st.session_state.ingredientes = [
-            {"nome": "Chocolate Sicao", "unidade": "kg", "preco": 65.00},
-            {"nome": "Leite Condensado", "unidade": "unidade", "preco": 6.50},
-            {"nome": "Creme de Leite", "unidade": "unidade", "preco": 4.20},
-            {"nome": "Confeitos", "unidade": "g", "preco": 0.05}
-        ]
+    # Carregar dados do CSV para a sessão
+    df_db = carregar_banco()
 
-    # --- ENTRADA DE DADOS ---
-    col1, col2 = st.columns([2, 1])
+    if df_db.empty:
+        st.warning("⚠️ O arquivo 'ingredientes.csv' está vazio ou não foi encontrado no GitHub.")
+        return
 
-    with col1:
-        st.subheader("📋 Composição da Receita")
-        nome_prod = st.text_input("Nome do Produto", "Ovo de Colher Ao Leite")
+    # --- ENTRADA DE DADOS PRINCIPAIS ---
+    col_header1, col_header2 = st.columns([2, 1])
+    
+    with col_header1:
+        nome_produto = st.text_input("Nome do Produto Final", "Ovo de Colher Ao Leite")
+    with col_header2:
+        margem_lucro = st.number_input("Margem de Lucro Desejada (%)", min_value=0, value=150)
+
+    st.divider()
+
+    # --- MONTAGEM DA RECEITA ---
+    col_esq, col_dir = st.columns([2, 1])
+
+    with col_esq:
+        st.subheader("📋 Ingredientes e Quantidades")
         
-        # Lista dinâmica de ingredientes
-        n_ing = st.number_input("Quantos itens na receita?", min_value=1, value=3)
+        # Seleção de quantos ingredientes compõem este produto
+        n_itens = st.number_input("Quantos ingredientes nesta receita?", min_value=1, max_value=30, value=3)
+        
+        itens_selecionados = []
         custo_ingredientes_total = 0.0
-        
-        for i in range(int(n_ing)):
-            c_a, c_b, c_c = st.columns([2, 1, 1])
-            with c_a:
-                nomes = [ing['nome'] for ing in st.session_state.ingredientes]
-                item = st.selectbox(f"Ingrediente {i+1}", nomes, key=f"item_{i}")
-            with c_b:
-                qtd = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}")
-            with c_c:
-                unid = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"unid_{i}")
+
+        # Criando a grade de entrada
+        for i in range(int(n_itens)):
+            c1, c2, c3, c4 = st.columns([3, 1.5, 1.5, 2])
             
-            # Cálculo lógico (Conversão g -> kg)
-            base = next(x for x in st.session_state.ingredientes if x['nome'] == item)
+            with c1:
+                escolha = st.selectbox(f"Item {i+1}", options=df_db['nome'].tolist(), key=f"nome_{i}")
+            
+            # Busca dados do item no banco carregado
+            dados_item = df_db[df_db['nome'] == escolha].iloc[0]
+            unid_base = str(dados_item['unidade']).lower().strip()
+            preco_base = float(dados_item['preco'])
+
+            with c2:
+                qtd_usada = st.number_input(f"Qtd.", min_value=0.0, step=0.01, key=f"qtd_{i}")
+            
+            with c3:
+                unid_uso = st.selectbox(f"Unid.", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+
+            # LÓGICA DE CONVERSÃO DE UNIDADES
             fator = 1.0
-            if unid == "g" and base['unidade'] == "kg": fator = 1/1000
-            elif unid == "kg" and base['unidade'] == "g": fator = 1000
+            if unid_uso == "g" and unid_base == "kg": fator = 1/1000
+            elif unid_uso == "kg" and unid_base == "g": fator = 1000
+            elif unid_uso == "ml" and unid_base == "l": fator = 1/1000
+            elif unid_uso == "L" and unid_base == "ml": fator = 1000
             
-            custo_ingredientes_total += (qtd * fator) * base['preco']
+            custo_parcial = (qtd_usada * fator) * preco_base
+            custo_ingredientes_total += custo_parcial
 
-    with col2:
-        st.subheader("📈 Custos Adicionais e Margens")
-        quebra = st.slider("Quebra/Desperdício (%)", 0, 10, 5)
-        despesas = st.slider("Despesas Gerais/Fixo (%)", 0, 50, 30)
-        embalagem = st.number_input("Custo da Embalagem (R$)", min_value=0.0, value=8.67)
-        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
+            with c4:
+                st.markdown(f"<p style='padding-top:35px;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
-    # --- CÁLCULOS ESTILO PLANILHA (BASEADOS NA IMAGEM) ---
-    # 1. Custo dos ingredientes + Quebra
-    valor_quebra = custo_ingredientes_total * (quebra / 100)
-    custo_com_quebra = custo_ingredientes_total + valor_quebra
-    
-    # 2. Despesas gerais sobre o custo base
-    valor_despesas = custo_ingredientes_total * (despesas / 100)
-    
-    # 3. Custo total do produto (Ingredientes + Quebra + Despesas + Embalagem)
-    custo_total_final = custo_com_quebra + valor_despesas + embalagem
-    
-    # 4. Lucro sobre o custo total
-    valor_lucro = custo_total_final * (margem_lucro / 100)
-    
-    # 5. Preço de Venda
-    preco_venda = custo_total_final + valor_lucro
+    # --- CUSTOS ADICIONAIS (ESTILO PLANILHA) ---
+    with col_dir:
+        st.subheader("⚙️ Adicionais")
+        perc_quebra = st.slider("Quebra/Desperdício (%)", 0, 20, 5)
+        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
+        valor_embalagem = st.number_input("Custo de Embalagem (R$)", min_value=0.0, value=8.67)
 
-    # --- EXIBIÇÃO FINAL ---
+    # --- CÁLCULOS FINAIS ---
+    valor_quebra = custo_ingredientes_total * (perc_quebra / 100)
+    valor_despesas = custo_ingredientes_total * (perc_despesas / 100)
+    
+    # Custo Total = Ingredientes + Quebra + Despesas + Embalagem
+    custo_producao_total = custo_ingredientes_total + valor_quebra + valor_despesas + valor_embalagem
+    
+    lucro_real = custo_producao_total * (margem_lucro / 100)
+    preco_venda_final = custo_producao_total + lucro_real
+
+    # --- EXIBIÇÃO DO RESULTADO ESTILO PLANILHA ---
     st.divider()
     
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        st.markdown("### 📊 Resumo de Custos")
-        resumo = {
-            "Descrição": ["Custo Ingredientes", "Quebra (5%)", "Desp. Gerais (30%)", "Embalagem", "CUSTO TOTAL"],
-            "Valores": [
+    res_col1, res_col2 = st.columns([1.5, 1])
+
+    with res_col1:
+        st.markdown("### 📝 Resumo da Planilha")
+        tabela_final = pd.DataFrame({
+            "Descrição": ["Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "CUSTO TOTAL"],
+            "Cálculo": ["Soma dos itens", f"{perc_quebra}% s/ ingredientes", f"{perc_despesas}% s/ ingredientes", "Valor fixo", "Custo de Produção"],
+            "Valor": [
                 f"R$ {custo_ingredientes_total:.2f}",
                 f"R$ {valor_quebra:.2f}",
                 f"R$ {valor_despesas:.2f}",
-                f"R$ {embalagem:.2f}",
-                f"R$ {custo_total_final:.2f}"
+                f"R$ {valor_embalagem:.2f}",
+                f"R$ {custo_producao_total:.2f}"
             ]
-        }
-        st.table(pd.DataFrame(resumo))
+        })
+        st.table(tabela_final)
 
-    with c2:
-        st.markdown("<div class='resultado-box'>", unsafe_allow_html=True)
-        st.markdown(f"## PREÇO DE VENDA: R$ {preco_venda:.2f}")
-        st.markdown(f"**Lucro Real:** R$ {valor_lucro:.2f}")
-        st.markdown(f"**Margem Aplicada:** {margem_lucro}%")
-        st.markdown("</div>", unsafe_allow_html=True)
-        
-        st.info(f"💡 Dica: Para vender o '{nome_prod}' com sucesso, seu custo de produção não deve ultrapassar 35% do preço de venda.")
+    with res_col2:
+        st.markdown(f"""
+        <div class='resultado-box'>
+            <h2 style='margin-top:0;'>PREÇO DE VENDA</h2>
+            <h1 style='color:#1e3a8a;'>R$ {preco_venda_final:.2f}</h1>
+            <hr>
+            <p><b>Produto:</b> {nome_produto}</p>
+            <p><b>Margem de Lucro:</b> {margem_lucro}%</p>
+            <p><b>Lucro no Bolso:</b> R$ {lucro_real:.2f}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
