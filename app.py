@@ -9,8 +9,6 @@ st.set_page_config(page_title="Precificador", layout="wide")
 st.markdown("""
     <style>
     .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
-    
-    /* QUADRADO DE RESULTADO - Cinza Escuro conforme solicitado */
     .resultado-box { 
         background-color: #262730; 
         padding: 25px; 
@@ -23,7 +21,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO DO ESTADO (Para evitar o erro da imagem) ---
+# Inicialização do Estado
 if "n_itens" not in st.session_state:
     st.session_state.n_itens = 1
 if "nome_prod" not in st.session_state:
@@ -54,33 +52,56 @@ def salvar_receita_csv(nome, lista_itens):
         df_final = df_nova
     df_final.to_csv("receitas_salvas.csv", index=False)
 
+# NOVA FUNÇÃO: DELETAR RECEITA
+def deletar_receita_csv(nome):
+    if os.path.exists("receitas_salvas.csv"):
+        df = pd.read_csv("receitas_salvas.csv")
+        df_restante = df[df['nome_receita'] != nome]
+        df_restante.to_csv("receitas_salvas.csv", index=False)
+        return True
+    return False
+
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas()
 
     st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
 
-    # --- ABA DE SELEÇÃO DE RECEITA ---
-    with st.expander("📂 Abrir Receita Salva"):
+    # --- GERENCIAR RECEITAS (ABRIR E DELETAR) ---
+    with st.expander("📂 Gerenciar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist()
-        receita_escolhida = st.selectbox("Escolha uma receita:", [""] + receitas_nomes)
-        if st.button("Carregar Dados"):
-            if receita_escolhida != "":
-                dados_rec = df_rec[df_rec['nome_receita'] == receita_escolhida]
-                # Atualiza o estado ANTES de renderizar os widgets
-                st.session_state.nome_prod = receita_escolhida
-                st.session_state.n_itens = len(dados_rec)
-                for idx, row in enumerate(dados_rec.itertuples()):
-                    st.session_state[f"nome_{idx}"] = row.ingrediente
-                    st.session_state[f"qtd_{idx}"] = float(row.qtd)
-                    st.session_state[f"u_{idx}"] = row.unid
-                st.rerun()
+        col_rec1, col_rec2 = st.columns([3, 1])
+        
+        with col_rec1:
+            receita_selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
+        
+        with col_rec2:
+            st.write("") # Espaçador
+            st.write("") 
+            if st.button("Carregar Dados", use_container_width=True):
+                if receita_selecionada != "":
+                    dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
+                    st.session_state.nome_prod = receita_selecionada
+                    st.session_state.n_itens = len(dados_rec)
+                    for idx, row in enumerate(dados_rec.itertuples()):
+                        st.session_state[f"nome_{idx}"] = row.ingrediente
+                        st.session_state[f"qtd_{idx}"] = float(row.qtd)
+                        st.session_state[f"u_{idx}"] = row.unid
+                    st.rerun()
+            
+            # BOTÃO DE DELETAR
+            if st.button("🗑️ Deletar Receita", use_container_width=True, type="secondary"):
+                if receita_selecionada != "":
+                    deletar_receita_csv(receita_selecionada)
+                    st.success(f"Receita '{receita_selecionada}' eliminada!")
+                    st.rerun()
+                else:
+                    st.warning("Selecione uma receita para eliminar.")
 
     # --- SEÇÃO DO PRODUTO ---
     col_prod1, col_prod2 = st.columns([2, 1])
     with col_prod1:
-        # Usamos o value=None ou apenas a key para o Session State controlar
-        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Digite o nome...")
+        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
     with col_prod2:
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
 
@@ -94,7 +115,6 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Removido o 'value=1' para evitar o erro de conflito
         n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, key="n_itens")
         
         custo_ingredientes_total = 0.0
@@ -103,9 +123,15 @@ def main():
         for i in range(int(n_itens)):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
             with c1:
-                escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
+                # Busca valor da sessão ou define o primeiro da lista
+                default_index = 0
+                if f"nome_{i}" in st.session_state:
+                    try:
+                        default_index = df_ing['nome'].tolist().index(st.session_state[f"nome_{i}"])
+                    except: pass
+                
+                escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}", index=default_index)
             
-            # Cálculo de custo (mesma lógica anterior)
             dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
             unid_base = str(dados_item['unidade']).lower().strip()
             preco_base = float(dados_item['preco'])
@@ -134,7 +160,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, step=0.1)
 
-    # --- CÁLCULOS FINAIS ---
+    # --- CÁLCULOS ---
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + valor_embalagem
@@ -156,6 +182,7 @@ def main():
             if nome_produto_final:
                 salvar_receita_csv(nome_produto_final, lista_para_salvar)
                 st.success(f"Receita '{nome_produto_final}' salva!")
+                st.rerun()
             else:
                 st.error("Dê um nome ao produto!")
 
