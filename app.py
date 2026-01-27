@@ -7,7 +7,7 @@ st.set_page_config(page_title="Precificador", layout="wide")
 # Estilização CSS personalizada
 st.markdown("""
     <style>
-    /* Estilo do Título Principal */
+    /* Título Principal */
     .titulo-planilha { 
         color: #1e3a8a; 
         font-weight: bold; 
@@ -15,25 +15,25 @@ st.markdown("""
         margin-bottom: 20px; 
     }
     
-    /* QUADRADO DE RESULTADO - Agora em Cinza Escuro */
+    /* QUADRADO DE RESULTADO - Cinza Escuro conforme solicitado */
     .resultado-box { 
-        background-color: #262730; /* Cinza Escuro */
+        background-color: #262730; 
         padding: 25px; 
         border-radius: 15px; 
-        border-left: 10px solid #1e3a8a; /* Detalhe lateral azul */
+        border-left: 10px solid #1e3a8a; 
         box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
-        color: #ffffff; /* Texto em Branco para leitura */
+        color: white; /* Garante que o texto dentro dele seja branco */
     }
-    
-    /* Estilo das tabelas para combinar */
-    .stTable { 
-        background-color: #ffffff; 
-        border-radius: 10px; 
+
+    /* Forçando as cores dos textos dentro da box escura */
+    .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b {
+        color: white !important;
     }
+
+    /* A tabela (stTable) NÃO foi alterada no CSS para permanecer original */
     </style>
     """, unsafe_allow_html=True)
 
-# Função para carregar o banco de dados
 def carregar_banco():
     try:
         df = pd.read_csv("ingredientes.csv")
@@ -45,7 +45,6 @@ def carregar_banco():
 def main():
     df_db = carregar_banco()
 
-    # Título
     st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
 
     # --- SEÇÃO DO PRODUTO ---
@@ -88,7 +87,6 @@ def main():
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
 
-            # Lógica de Conversão
             fator = 1.0
             if unid_uso == "g" and unid_base == "kg": fator = 1/1000
             elif unid_uso == "kg" and unid_base == "g": fator = 1000
@@ -120,6 +118,7 @@ def main():
     res1, res2 = st.columns([1.5, 1])
 
     with res1:
+        # A tabela mantém o comportamento original do Streamlit (branca)
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
             "Item": ["Ingredientes", "Quebra", "Despesas", "Embalagem", "TOTAL CUSTO"],
@@ -128,12 +127,12 @@ def main():
         st.table(df_resumo)
 
     with res2:
-        # Exibição no quadrado cinza escuro
+        # Apenas este quadrado fica cinza escuro
         st.markdown(f"""
         <div class='resultado-box'>
-            <p style='margin:0; font-size:14px; color: #a1a1aa;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
-            <h2 style='margin:0; color: #ffffff;'>PREÇO DE VENDA</h2>
-            <h1 style='color:#60a5fa; font-size:48px;'>R$ {preco_final:.2f}</h1>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
+            <h2 style='margin:0;'>PREÇO DE VENDA</h2>
+            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Lucro Real:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
             <p><b>Margem:</b> {margem_lucro}%</p>
