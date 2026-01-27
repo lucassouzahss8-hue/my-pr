@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 # Configuração da Página
-st.set_page_config(page_title="Precificador", layout="wide")
+st.set_page_config(page_title="Precificador Pro", layout="wide")
 
 # Estilização CSS
 st.markdown("""
@@ -64,7 +64,7 @@ def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas()
 
-    st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='titulo-planilha'>Precificador Profissional</h1>", unsafe_allow_html=True)
 
     # --- GERENCIAR RECEITAS ---
     with st.expander("📂 Gerenciar Receitas Salvas"):
@@ -90,16 +90,16 @@ def main():
                     deletar_receita_csv(receita_selecionada)
                     st.rerun()
 
-    # --- SEÇÃO DO PRODUTO, ENTREGA E PAGAMENTO ---
+    # --- SEÇÃO DO PRODUTO, DISTÂNCIA E PAGAMENTO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
     with col_p2:
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_p3:
-        taxa_entrega = st.number_input("Taxa de Entrega (R$)", min_value=0.0, value=0.0, step=1.0)
+        # ALTERADO: AGORA É KM DE DISTÂNCIA
+        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.5, help="Até 5km é grátis. Após isso, R$ 2,00 por km.")
     with col_p4:
-        # NOVO: FORMA DE PAGAMENTO
         forma_pagamento = st.selectbox("Forma de Pagamento", ["PIX", "Débito", "Crédito"])
         
     st.divider()
@@ -153,6 +153,12 @@ def main():
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, step=0.1)
 
     # --- CÁLCULOS ---
+    # Cálculo da Taxa de Entrega Dinâmica
+    if distancia_km > 5:
+        taxa_entrega = (distancia_km - 5) * 2
+    else:
+        taxa_entrega = 0.0
+
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + valor_embalagem
@@ -160,16 +166,15 @@ def main():
     
     preco_venda_produto = custo_total_prod + lucro_valor
     
-    # TAXAS FINANCEIRAS
+    # Taxas Financeiras (sobre total acumulado)
     taxa_percentual = 0.0
-    if forma_pagamento == "Débito": taxa_percentual = 0.0199 # 1.99%
-    elif forma_pagamento == "Crédito": taxa_percentual = 0.0499 # 4.99%
+    if forma_pagamento == "Débito": taxa_percentual = 0.0199 
+    elif forma_pagamento == "Crédito": taxa_percentual = 0.0499 
     
-    # Calculamos a taxa sobre o valor final (produto + entrega)
-    valor_base_taxa = preco_venda_produto + taxa_entrega
-    v_taxa_financeira = valor_base_taxa * taxa_percentual
+    valor_base_pagamento = preco_venda_produto + taxa_entrega
+    v_taxa_financeira = valor_base_pagamento * taxa_percentual
     
-    preco_venda_final = valor_base_taxa + v_taxa_financeira
+    preco_venda_final = valor_base_pagamento + v_taxa_financeira
 
     # --- EXIBIÇÃO ---
     st.divider()
@@ -178,7 +183,12 @@ def main():
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         
         df_resumo = pd.DataFrame({
-            "Item": ["Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", "Taxa de Entrega", f"Taxa Financeira ({forma_pagamento})", "TOTAL A COBRAR"],
+            "Item": [
+                "Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", 
+                "Embalagem", "Custo Produção", "Lucro", 
+                f"Taxa Entrega ({distancia_km}km)", f"Taxa Financeira ({forma_pagamento})", 
+                "TOTAL A COBRAR"
+            ],
             "Valor": [
                 f"R$ {custo_ingredientes_total:.2f}",
                 f"R$ {v_quebra:.2f}",
@@ -196,7 +206,7 @@ def main():
         if st.button("💾 Salvar esta Receita"):
             if nome_produto_final:
                 salvar_receita_csv(nome_produto_final, lista_para_salvar)
-                st.success("Receita salva!")
+                st.success("Salva!")
                 st.rerun()
 
     with res2:
@@ -207,8 +217,8 @@ def main():
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Preço do Produto:</b> R$ {preco_venda_produto:.2f}</p>
-            <p><b>Taxa de Entrega:</b> R$ {taxa_entrega:.2f}</p>
-            <p><b>Taxa Maquininha:</b> R$ {v_taxa_financeira:.2f}</p>
+            <p><b>Distância:</b> {distancia_km} km</p>
+            <p><b>Frete:</b> R$ {taxa_entrega:.2f} <small>(Isento até 5km)</small></p>
             <p><b>Seu Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
         </div>
         """, unsafe_allow_html=True)
