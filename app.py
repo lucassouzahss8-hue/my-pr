@@ -4,11 +4,32 @@ import pandas as pd
 # Configuração da Página
 st.set_page_config(page_title="Precificador", layout="wide")
 
-# Estilização CSS
+# Estilização CSS personalizada
 st.markdown("""
     <style>
-    .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
-    .resultado-box { background-color: #f0f2f6; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
+    /* Estilo do Título Principal */
+    .titulo-planilha { 
+        color: #1e3a8a; 
+        font-weight: bold; 
+        border-bottom: 2px solid #1e3a8a; 
+        margin-bottom: 20px; 
+    }
+    
+    /* QUADRADO DE RESULTADO - Agora em Cinza Escuro */
+    .resultado-box { 
+        background-color: #262730; /* Cinza Escuro */
+        padding: 25px; 
+        border-radius: 15px; 
+        border-left: 10px solid #1e3a8a; /* Detalhe lateral azul */
+        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
+        color: #ffffff; /* Texto em Branco para leitura */
+    }
+    
+    /* Estilo das tabelas para combinar */
+    .stTable { 
+        background-color: #ffffff; 
+        border-radius: 10px; 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -24,15 +45,14 @@ def carregar_banco():
 def main():
     df_db = carregar_banco()
 
-    # Título simplificado conforme solicitado
+    # Título
     st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
 
     # --- SEÇÃO DO PRODUTO ---
     col_prod1, col_prod2 = st.columns([2, 1])
     
     with col_prod1:
-        # Nome do produto agora inicia em branco
-        nome_produto_final = st.text_input("Nome do Produto Final:", value="", placeholder="Digite o nome do produto...")
+        nome_produto_final = st.text_input("Nome do Produto Final:", value="", placeholder="Ex: Bolo de Chocolate")
     
     with col_prod2:
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
@@ -48,7 +68,6 @@ def main():
 
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Inicia com apenas 1 ingrediente, usuário aumenta conforme a necessidade
         n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, max_value=50, value=1)
         
         custo_ingredientes_total = 0.0
@@ -84,7 +103,7 @@ def main():
 
     # --- ADICIONAIS ---
     with col_dir:
-        st.subheader("⚙️ Custos Extras")
+        st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, step=0.1)
@@ -109,13 +128,14 @@ def main():
         st.table(df_resumo)
 
     with res2:
+        # Exibição no quadrado cinza escuro
         st.markdown(f"""
         <div class='resultado-box'>
-            <p style='margin:0; font-size:14px;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
-            <h2 style='margin:0;'>PREÇO DE VENDA</h2>
-            <h1 style='color:#1e3a8a; font-size:48px;'>R$ {preco_final:.2f}</h1>
-            <hr>
-            <p><b>Lucro Real:</b> R$ {lucro_valor:.2f}</p>
+            <p style='margin:0; font-size:14px; color: #a1a1aa;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
+            <h2 style='margin:0; color: #ffffff;'>PREÇO DE VENDA</h2>
+            <h1 style='color:#60a5fa; font-size:48px;'>R$ {preco_final:.2f}</h1>
+            <hr style='border-color: #4b5563;'>
+            <p><b>Lucro Real:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
             <p><b>Margem:</b> {margem_lucro}%</p>
         </div>
         """, unsafe_allow_html=True)
