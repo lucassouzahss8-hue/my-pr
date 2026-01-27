@@ -2,13 +2,28 @@ import streamlit as st
 import pandas as pd
 import os
 
-# Configuração da Página
-st.set_page_config(page_title="Precificador Pro", layout="wide")
+# 1. Configuração da Página - Identidade do App
+st.set_page_config(
+    page_title="Precificador", 
+    page_icon="📊", 
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# Estilização CSS
+# 2. Estilização CSS para visual de App Profissional
 st.markdown("""
     <style>
-    .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    .titulo-planilha { 
+        color: #1e3a8a; 
+        font-weight: bold; 
+        border-bottom: 2px solid #1e3a8a; 
+        margin-bottom: 20px; 
+        text-align: center;
+    }
     .resultado-box { 
         background-color: #262730; 
         padding: 25px; 
@@ -21,13 +36,13 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Inicialização do Estado
+# --- INICIALIZAÇÃO DO ESTADO ---
 if "n_itens" not in st.session_state:
     st.session_state.n_itens = 1
 if "nome_prod" not in st.session_state:
     st.session_state.nome_prod = ""
 
-# --- FUNÇÕES DE BANCO DE DADOS ---
+# --- FUNÇÕES DE DADOS (CSV) ---
 def carregar_ingredientes():
     try:
         df = pd.read_csv("ingredientes.csv")
@@ -60,14 +75,15 @@ def deletar_receita_csv(nome):
         return True
     return False
 
+# --- APP PRINCIPAL ---
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas()
 
-    st.markdown("<h1 class='titulo-planilha'>Precificador Profissional</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
     # --- GERENCIAR RECEITAS ---
-    with st.expander("📂 Gerenciar Receitas Salvas"):
+    with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist()
         col_rec1, col_rec2 = st.columns([3, 1])
         with col_rec1:
@@ -75,7 +91,7 @@ def main():
         with col_rec2:
             st.write("") 
             st.write("") 
-            if st.button("Carregar Dados", use_container_width=True):
+            if st.button("🔄 Carregar", use_container_width=True):
                 if receita_selecionada != "":
                     dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                     st.session_state.nome_prod = receita_selecionada
@@ -85,35 +101,35 @@ def main():
                         st.session_state[f"qtd_{idx}"] = float(row.qtd)
                         st.session_state[f"u_{idx}"] = row.unid
                     st.rerun()
-            if st.button("🗑️ Deletar Receita", use_container_width=True):
+            if st.button("🗑️ Deletar", use_container_width=True):
                 if receita_selecionada != "":
                     deletar_receita_csv(receita_selecionada)
                     st.rerun()
 
-    # --- SEÇÃO DO PRODUTO, DISTÂNCIA E PAGAMENTO ---
+    # --- CONFIGURAÇÕES DO PRODUTO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
-        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
+        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Pote")
     with col_p2:
-        # VOLTOU AO PADRÃO: Valor 150 fixo ao iniciar
+        # Mantendo margem de lucro como estava (padrão 150)
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_p3:
-        # MANTIDO: Em branco (None)
-        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
+        # Distância em branco (None)
+        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, step=0.1, placeholder="Ex: 8.0")
     with col_p4:
-        forma_pagamento = st.selectbox("Forma de Pagamento", ["PIX", "Débito", "Crédito"])
+        forma_pagamento = st.selectbox("Pagamento", ["PIX", "Débito", "Crédito"])
         
     st.divider()
 
     if df_ing.empty:
-        st.error("⚠️ Arquivo 'ingredientes.csv' não encontrado.")
+        st.error("⚠️ O arquivo 'ingredientes.csv' não foi detectado.")
         return
 
-    # --- MONTAGEM DA RECEITA ---
+    # --- INGREDIENTES ---
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, key="n_itens")
+        n_itens = st.number_input("Número de itens:", min_value=1, key="n_itens")
         custo_ingredientes_total = 0.0
         lista_para_salvar = []
 
@@ -131,13 +147,12 @@ def main():
             preco_base = float(dados_item['preco'])
 
             with c2:
-                # MANTIDO: Em branco (None)
+                # Quantidade em branco (None)
                 qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01, value=None, placeholder="0.0")
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
 
             val_qtd = qtd_usada if qtd_usada is not None else 0.0
-
             fator = 1.0
             if unid_uso == "g" and unid_base == "kg": fator = 1/1000
             elif unid_uso == "kg" and unid_base == "g": fator = 1000
@@ -154,18 +169,15 @@ def main():
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-        # MANTIDO: Em branco (None)
+        # Embalagem em branco (None)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
 
-    # --- TRATAMENTO DE VALORES ---
+    # --- CÁLCULOS FINAIS ---
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = valor_embalagem if valor_embalagem is not None else 0.0
 
-    # --- CÁLCULOS ---
-    if val_dist > 5:
-        taxa_entrega = (val_dist - 5) * 2
-    else:
-        taxa_entrega = 0.0
+    # Frete: R$ 2,00 por cada km que passar de 5km
+    taxa_entrega = (val_dist - 5) * 2 if val_dist > 5 else 0.0
 
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
@@ -174,41 +186,41 @@ def main():
     
     preco_venda_produto = custo_total_prod + lucro_valor
     
+    # Taxas da Maquininha
     taxa_percentual = 0.0
     if forma_pagamento == "Débito": taxa_percentual = 0.0199 
     elif forma_pagamento == "Crédito": taxa_percentual = 0.0499 
     
-    valor_base_pagamento = preco_venda_produto + taxa_entrega
-    v_taxa_financeira = valor_base_pagamento * taxa_percentual
-    preco_venda_final = valor_base_pagamento + v_taxa_financeira
+    valor_base_taxa = preco_venda_produto + taxa_entrega
+    v_taxa_financeira = valor_base_taxa * taxa_percentual
+    preco_venda_final = valor_base_taxa + v_taxa_financeira
 
-    # --- EXIBIÇÃO ---
+    # --- TABELA E QUADRADO DE RESULTADOS ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
-            "Item": ["Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Taxa Entrega ({val_dist}km)", f"Taxa Financeira ({forma_pagamento})", "TOTAL A COBRAR"],
+            "Item": ["Ingredientes", "Quebra", "Despesas", "Embalagem", "Custo Produção", "Lucro", f"Entrega ({val_dist}km)", f"Taxa {forma_pagamento}", "TOTAL A COBRAR"],
             "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {val_emb:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
-        if st.button("💾 Salvar esta Receita"):
+        if st.button("💾 Salvar Receita"):
             if nome_produto_final:
                 salvar_receita_csv(nome_produto_final, lista_para_salvar)
-                st.success("Salva!")
+                st.success(f"Receita '{nome_produto_final}' salva!")
                 st.rerun()
 
     with res2:
         st.markdown(f"""
         <div class='resultado-box'>
-            <p style='margin:0; font-size:14px; opacity: 0.8;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>{nome_produto_final.upper() if nome_produto_final else 'PRODUTO NOVO'}</p>
             <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Preço do Produto:</b> R$ {preco_venda_produto:.2f}</p>
-            <p><b>Distância:</b> {val_dist} km</p>
-            <p><b>Frete:</b> R$ {taxa_entrega:.2f}</p>
+            <p><b>Entrega:</b> R$ {taxa_entrega:.2f}</p>
             <p><b>Seu Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
         </div>
         """, unsafe_allow_html=True)
