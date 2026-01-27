@@ -97,8 +97,7 @@ def main():
     with col_prod2:
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_prod3:
-        # NOVO CAMPO: TAXA DE ENTREGA
-        taxa_entrega = st.number_input("Taxa de Entrega (R$)", min_value=0.0, value=0.0, step=1.0, help="Deixe 0 se a entrega for grátis até 5km.")
+        taxa_entrega = st.number_input("Taxa de Entrega (R$)", min_value=0.0, value=0.0, step=1.0)
 
     st.divider()
 
@@ -156,29 +155,35 @@ def main():
     custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + valor_embalagem
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     
-    # Preço de Venda inclui o Produto + a Entrega
     preco_venda_produto = custo_total_prod + lucro_valor
-    preco_venda_final_com_entrega = preco_venda_produto + taxa_entrega
+    preco_venda_final = preco_venda_produto + taxa_entrega
 
     # --- EXIBIÇÃO ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
+        
+        # TABELA REVERTIDA PARA O FORMATO DETALHADO ORIGINAL
         df_resumo = pd.DataFrame({
-            "Item": ["Produção", "Lucro", "Taxa de Entrega", "VALOR TOTAL A COBRAR"],
+            "Item": ["Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", "Taxa de Entrega", "TOTAL A COBRAR"],
             "Valor": [
-                f"R$ {custo_total_prod:.2f}", 
-                f"R$ {lucro_valor:.2f}", 
-                f"R$ {taxa_entrega:.2f}", 
-                f"R$ {preco_venda_final_com_entrega:.2f}"
+                f"R$ {custo_ingredientes_total:.2f}",
+                f"R$ {v_quebra:.2f}",
+                f"R$ {v_despesas:.2f}",
+                f"R$ {valor_embalagem:.2f}",
+                f"R$ {custo_total_prod:.2f}",
+                f"R$ {lucro_valor:.2f}",
+                f"R$ {taxa_entrega:.2f}",
+                f"R$ {preco_venda_final:.2f}"
             ]
         })
         st.table(df_resumo)
+        
         if st.button("💾 Salvar esta Receita"):
             if nome_produto_final:
                 salvar_receita_csv(nome_produto_final, lista_para_salvar)
-                st.success("Salva!")
+                st.success("Receita salva com sucesso!")
                 st.rerun()
 
     with res2:
@@ -186,11 +191,11 @@ def main():
         <div class='resultado-box'>
             <p style='margin:0; font-size:14px; opacity: 0.8;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
             <h2 style='margin:0;'>TOTAL PARA O CLIENTE</h2>
-            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final_com_entrega:.2f}</h1>
+            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Preço do Produto:</b> R$ {preco_venda_produto:.2f}</p>
             <p><b>Taxa de Entrega:</b> R$ {taxa_entrega:.2f}</p>
-            <p><b>Seu Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
+            <p><b>Lucro Real:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
         </div>
         """, unsafe_allow_html=True)
 
