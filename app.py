@@ -95,10 +95,10 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
     with col_p2:
-        # Campo de Margem vazio por padrão
-        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0.0, value=None, placeholder="Ex: 150")
+        # VOLTOU AO PADRÃO: Valor 150 fixo ao iniciar
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_p3:
-        # Campo de Distância vazio por padrão
+        # MANTIDO: Em branco (None)
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
     with col_p4:
         forma_pagamento = st.selectbox("Forma de Pagamento", ["PIX", "Débito", "Crédito"])
@@ -131,12 +131,11 @@ def main():
             preco_base = float(dados_item['preco'])
 
             with c2:
-                # Quantidade do ingrediente vazia por padrão
+                # MANTIDO: Em branco (None)
                 qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01, value=None, placeholder="0.0")
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
 
-            # Garantir que o cálculo não quebre se o valor for None
             val_qtd = qtd_usada if qtd_usada is not None else 0.0
 
             fator = 1.0
@@ -155,11 +154,10 @@ def main():
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-        # Embalagem vazia por padrão
+        # MANTIDO: Em branco (None)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
 
-    # --- TRATAMENTO DE VALORES NULOS PARA O CÁLCULO ---
-    val_margem = margem_lucro if margem_lucro is not None else 0.0
+    # --- TRATAMENTO DE VALORES ---
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = valor_embalagem if valor_embalagem is not None else 0.0
 
@@ -172,7 +170,7 @@ def main():
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + val_emb
-    lucro_valor = custo_total_prod * (val_margem / 100)
+    lucro_valor = custo_total_prod * (margem_lucro / 100)
     
     preco_venda_produto = custo_total_prod + lucro_valor
     
