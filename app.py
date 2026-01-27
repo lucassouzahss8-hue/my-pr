@@ -2,139 +2,121 @@ import streamlit as st
 import pandas as pd
 
 # Configuração da Página
-st.set_page_config(page_title="Precificador Pro - Doces & Salgados", layout="wide")
+st.set_page_config(page_title="Precificador", layout="wide")
 
-# Estilização CSS para visual Profissional
+# Estilização CSS
 st.markdown("""
     <style>
     .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
     .resultado-box { background-color: #f0f2f6; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); }
-    .stTable { background-color: white; border-radius: 10px; }
     </style>
     """, unsafe_allow_html=True)
 
-# 1. FUNÇÃO PARA CARREGAR O BANCO DE DADOS (CSV)
+# Função para carregar o banco de dados
 def carregar_banco():
     try:
-        # Lê o arquivo CSV que você subiu no GitHub
         df = pd.read_csv("ingredientes.csv")
-        # Garante que as colunas estejam limpas
         df.columns = df.columns.str.strip().str.lower()
         return df
-    except Exception as e:
-        # Caso o arquivo não exista ou esteja errado, mostra um aviso e usa um padrão
-        st.error(f"Erro ao carregar 'ingredientes.csv': {e}")
+    except Exception:
         return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
 def main():
-    st.markdown("<h1 class='titulo-planilha'>SISTEMA DE PRECIFICAÇÃO PROFISSIONAL</h1>", unsafe_allow_html=True)
-
-    # Carregar dados do CSV para a sessão
     df_db = carregar_banco()
 
-    if df_db.empty:
-        st.warning("⚠️ O arquivo 'ingredientes.csv' está vazio ou não foi encontrado no GitHub.")
-        return
+    # Título simplificado conforme solicitado
+    st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
 
-    # --- ENTRADA DE DADOS PRINCIPAIS ---
-    col_header1, col_header2 = st.columns([2, 1])
+    # --- SEÇÃO DO PRODUTO ---
+    col_prod1, col_prod2 = st.columns([2, 1])
     
-    with col_header1:
-        nome_produto = st.text_input("Nome do Produto Final", "Ovo de Colher Ao Leite")
-    with col_header2:
-        margem_lucro = st.number_input("Margem de Lucro Desejada (%)", min_value=0, value=150)
+    with col_prod1:
+        # Nome do produto agora inicia em branco
+        nome_produto_final = st.text_input("Nome do Produto Final:", value="", placeholder="Digite o nome do produto...")
+    
+    with col_prod2:
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
 
     st.divider()
+
+    if df_db.empty:
+        st.error("⚠️ Arquivo 'ingredientes.csv' não encontrado no GitHub.")
+        return
 
     # --- MONTAGEM DA RECEITA ---
     col_esq, col_dir = st.columns([2, 1])
 
     with col_esq:
-        st.subheader("📋 Ingredientes e Quantidades")
+        st.subheader("🛒 Ingredientes")
+        # Inicia com apenas 1 ingrediente, usuário aumenta conforme a necessidade
+        n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, max_value=50, value=1)
         
-        # Seleção de quantos ingredientes compõem este produto
-        n_itens = st.number_input("Quantos ingredientes nesta receita?", min_value=1, max_value=30, value=3)
-        
-        itens_selecionados = []
         custo_ingredientes_total = 0.0
 
-        # Criando a grade de entrada
         for i in range(int(n_itens)):
-            c1, c2, c3, c4 = st.columns([3, 1.5, 1.5, 2])
+            c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
             
             with c1:
                 escolha = st.selectbox(f"Item {i+1}", options=df_db['nome'].tolist(), key=f"nome_{i}")
             
-            # Busca dados do item no banco carregado
             dados_item = df_db[df_db['nome'] == escolha].iloc[0]
             unid_base = str(dados_item['unidade']).lower().strip()
             preco_base = float(dados_item['preco'])
 
             with c2:
-                qtd_usada = st.number_input(f"Qtd.", min_value=0.0, step=0.01, key=f"qtd_{i}")
+                qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01)
             
             with c3:
-                unid_uso = st.selectbox(f"Unid.", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+                unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
 
-            # LÓGICA DE CONVERSÃO DE UNIDADES
+            # Lógica de Conversão
             fator = 1.0
             if unid_uso == "g" and unid_base == "kg": fator = 1/1000
             elif unid_uso == "kg" and unid_base == "g": fator = 1000
-            elif unid_uso == "ml" and unid_base == "l": fator = 1/1000
-            elif unid_uso == "L" and unid_base == "ml": fator = 1000
+            elif unid_uso.lower() == "ml" and unid_base.lower() == "l": fator = 1/1000
+            elif unid_uso.lower() == "l" and unid_base.lower() == "ml": fator = 1000
             
             custo_parcial = (qtd_usada * fator) * preco_base
             custo_ingredientes_total += custo_parcial
 
             with c4:
-                st.markdown(f"<p style='padding-top:35px;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
-    # --- CUSTOS ADICIONAIS (ESTILO PLANILHA) ---
+    # --- ADICIONAIS ---
     with col_dir:
-        st.subheader("⚙️ Adicionais")
-        perc_quebra = st.slider("Quebra/Desperdício (%)", 0, 20, 5)
+        st.subheader("⚙️ Custos Extras")
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-        valor_embalagem = st.number_input("Custo de Embalagem (R$)", min_value=0.0, value=8.67)
+        valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, step=0.1)
 
-    # --- CÁLCULOS FINAIS ---
-    valor_quebra = custo_ingredientes_total * (perc_quebra / 100)
-    valor_despesas = custo_ingredientes_total * (perc_despesas / 100)
-    
-    # Custo Total = Ingredientes + Quebra + Despesas + Embalagem
-    custo_producao_total = custo_ingredientes_total + valor_quebra + valor_despesas + valor_embalagem
-    
-    lucro_real = custo_producao_total * (margem_lucro / 100)
-    preco_venda_final = custo_producao_total + lucro_real
+    # --- CÁLCULOS ---
+    v_quebra = custo_ingredientes_total * (perc_quebra / 100)
+    v_despesas = custo_ingredientes_total * (perc_despesas / 100)
+    custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + valor_embalagem
+    lucro_valor = custo_total_prod * (margem_lucro / 100)
+    preco_final = custo_total_prod + lucro_valor
 
-    # --- EXIBIÇÃO DO RESULTADO ESTILO PLANILHA ---
+    # --- EXIBIÇÃO ---
     st.divider()
-    
-    res_col1, res_col2 = st.columns([1.5, 1])
+    res1, res2 = st.columns([1.5, 1])
 
-    with res_col1:
-        st.markdown("### 📝 Resumo da Planilha")
-        tabela_final = pd.DataFrame({
-            "Descrição": ["Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "CUSTO TOTAL"],
-            "Cálculo": ["Soma dos itens", f"{perc_quebra}% s/ ingredientes", f"{perc_despesas}% s/ ingredientes", "Valor fixo", "Custo de Produção"],
-            "Valor": [
-                f"R$ {custo_ingredientes_total:.2f}",
-                f"R$ {valor_quebra:.2f}",
-                f"R$ {valor_despesas:.2f}",
-                f"R$ {valor_embalagem:.2f}",
-                f"R$ {custo_producao_total:.2f}"
-            ]
+    with res1:
+        st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
+        df_resumo = pd.DataFrame({
+            "Item": ["Ingredientes", "Quebra", "Despesas", "Embalagem", "TOTAL CUSTO"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}"]
         })
-        st.table(tabela_final)
+        st.table(df_resumo)
 
-    with res_col2:
+    with res2:
         st.markdown(f"""
         <div class='resultado-box'>
-            <h2 style='margin-top:0;'>PREÇO DE VENDA</h2>
-            <h1 style='color:#1e3a8a;'>R$ {preco_venda_final:.2f}</h1>
+            <p style='margin:0; font-size:14px;'>PRODUTO: {nome_produto_final.upper() if nome_produto_final else '---'}</p>
+            <h2 style='margin:0;'>PREÇO DE VENDA</h2>
+            <h1 style='color:#1e3a8a; font-size:48px;'>R$ {preco_final:.2f}</h1>
             <hr>
-            <p><b>Produto:</b> {nome_produto}</p>
-            <p><b>Margem de Lucro:</b> {margem_lucro}%</p>
-            <p><b>Lucro no Bolso:</b> R$ {lucro_real:.2f}</p>
+            <p><b>Lucro Real:</b> R$ {lucro_valor:.2f}</p>
+            <p><b>Margem:</b> {margem_lucro}%</p>
         </div>
         """, unsafe_allow_html=True)
 
