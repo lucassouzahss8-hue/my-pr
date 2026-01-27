@@ -9,10 +9,25 @@ st.set_page_config(page_title="Precificador", layout="wide")
 st.markdown("""
     <style>
     .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; }
-    .resultado-box { background-color: #262730; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 15px rgba(0,0,0,0.3); color: white; }
+    
+    /* QUADRADO DE RESULTADO - Cinza Escuro conforme solicitado */
+    .resultado-box { 
+        background-color: #262730; 
+        padding: 25px; 
+        border-radius: 15px; 
+        border-left: 10px solid #1e3a8a; 
+        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
+        color: white; 
+    }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
+
+# --- INICIALIZAÇÃO DO ESTADO (Para evitar o erro da imagem) ---
+if "n_itens" not in st.session_state:
+    st.session_state.n_itens = 1
+if "nome_prod" not in st.session_state:
+    st.session_state.nome_prod = ""
 
 # --- FUNÇÕES DE BANCO DE DADOS ---
 def carregar_ingredientes():
@@ -33,7 +48,6 @@ def salvar_receita_csv(nome, lista_itens):
     df_nova['nome_receita'] = nome
     if os.path.exists("receitas_salvas.csv"):
         df_antiga = pd.read_csv("receitas_salvas.csv")
-        # Remove versão antiga da mesma receita se existir
         df_antiga = df_antiga[df_antiga['nome_receita'] != nome]
         df_final = pd.concat([df_antiga, df_nova], ignore_index=True)
     else:
@@ -46,13 +60,14 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>Precificador</h1>", unsafe_allow_html=True)
 
-    # --- ABA DE SELEÇÃO DE RECEITA PRENTA ---
+    # --- ABA DE SELEÇÃO DE RECEITA ---
     with st.expander("📂 Abrir Receita Salva"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist()
-        receita_escolhida = st.selectbox("Escolha uma receita para carregar:", [""] + receitas_nomes)
+        receita_escolhida = st.selectbox("Escolha uma receita:", [""] + receitas_nomes)
         if st.button("Carregar Dados"):
             if receita_escolhida != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_escolhida]
+                # Atualiza o estado ANTES de renderizar os widgets
                 st.session_state.nome_prod = receita_escolhida
                 st.session_state.n_itens = len(dados_rec)
                 for idx, row in enumerate(dados_rec.itertuples()):
@@ -64,7 +79,8 @@ def main():
     # --- SEÇÃO DO PRODUTO ---
     col_prod1, col_prod2 = st.columns([2, 1])
     with col_prod1:
-        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
+        # Usamos o value=None ou apenas a key para o Session State controlar
+        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Digite o nome...")
     with col_prod2:
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
 
@@ -78,7 +94,8 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, value=1, key="n_itens")
+        # Removido o 'value=1' para evitar o erro de conflito
+        n_itens = st.number_input("Quantidade de itens na receita:", min_value=1, key="n_itens")
         
         custo_ingredientes_total = 0.0
         lista_para_salvar = []
@@ -88,6 +105,7 @@ def main():
             with c1:
                 escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
             
+            # Cálculo de custo (mesma lógica anterior)
             dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
             unid_base = str(dados_item['unidade']).lower().strip()
             preco_base = float(dados_item['preco'])
@@ -105,8 +123,6 @@ def main():
             
             custo_parcial = (qtd_usada * fator) * preco_base
             custo_ingredientes_total += custo_parcial
-            
-            # Guardar para caso o usuário queira salvar a receita
             lista_para_salvar.append({"ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
 
             with c4:
@@ -118,7 +134,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, step=0.1)
 
-    # --- CÁLCULOS ---
+    # --- CÁLCULOS FINAIS ---
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + valor_embalagem
@@ -136,13 +152,12 @@ def main():
         })
         st.table(df_resumo)
         
-        # Botão para Salvar a Receita
         if st.button("💾 Salvar esta Receita"):
             if nome_produto_final:
                 salvar_receita_csv(nome_produto_final, lista_para_salvar)
-                st.success(f"Receita '{nome_produto_final}' salva com sucesso!")
+                st.success(f"Receita '{nome_produto_final}' salva!")
             else:
-                st.error("Dê um nome ao produto antes de salvar.")
+                st.error("Dê um nome ao produto!")
 
     with res2:
         st.markdown(f"""
