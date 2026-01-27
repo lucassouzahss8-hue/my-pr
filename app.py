@@ -95,10 +95,11 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Chocolate")
     with col_p2:
-        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
+        # Campo de Margem vazio por padrão
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0.0, value=None, placeholder="Ex: 150")
     with col_p3:
-        # ALTERADO: AGORA É KM DE DISTÂNCIA
-        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.5, help="Até 5km é grátis. Após isso, R$ 2,00 por km.")
+        # Campo de Distância vazio por padrão
+        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
     with col_p4:
         forma_pagamento = st.selectbox("Forma de Pagamento", ["PIX", "Débito", "Crédito"])
         
@@ -130,9 +131,13 @@ def main():
             preco_base = float(dados_item['preco'])
 
             with c2:
-                qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01)
+                # Quantidade do ingrediente vazia por padrão
+                qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01, value=None, placeholder="0.0")
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+
+            # Garantir que o cálculo não quebre se o valor for None
+            val_qtd = qtd_usada if qtd_usada is not None else 0.0
 
             fator = 1.0
             if unid_uso == "g" and unid_base == "kg": fator = 1/1000
@@ -140,9 +145,9 @@ def main():
             elif unid_uso.lower() == "ml" and unid_base.lower() == "l": fator = 1/1000
             elif unid_uso.lower() == "l" and unid_base.lower() == "ml": fator = 1000
             
-            custo_parcial = (qtd_usada * fator) * preco_base
+            custo_parcial = (val_qtd * fator) * preco_base
             custo_ingredientes_total += custo_parcial
-            lista_para_salvar.append({"ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
+            lista_para_salvar.append({"ingrediente": escolha, "qtd": val_qtd, "unid": unid_uso})
             with c4:
                 st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
@@ -150,30 +155,33 @@ def main():
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-        valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, step=0.1)
+        # Embalagem vazia por padrão
+        valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
+
+    # --- TRATAMENTO DE VALORES NULOS PARA O CÁLCULO ---
+    val_margem = margem_lucro if margem_lucro is not None else 0.0
+    val_dist = distancia_km if distancia_km is not None else 0.0
+    val_emb = valor_embalagem if valor_embalagem is not None else 0.0
 
     # --- CÁLCULOS ---
-    # Cálculo da Taxa de Entrega Dinâmica
-    if distancia_km > 5:
-        taxa_entrega = (distancia_km - 5) * 2
+    if val_dist > 5:
+        taxa_entrega = (val_dist - 5) * 2
     else:
         taxa_entrega = 0.0
 
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
-    custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + valor_embalagem
-    lucro_valor = custo_total_prod * (margem_lucro / 100)
+    custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + val_emb
+    lucro_valor = custo_total_prod * (val_margem / 100)
     
     preco_venda_produto = custo_total_prod + lucro_valor
     
-    # Taxas Financeiras (sobre total acumulado)
     taxa_percentual = 0.0
     if forma_pagamento == "Débito": taxa_percentual = 0.0199 
     elif forma_pagamento == "Crédito": taxa_percentual = 0.0499 
     
     valor_base_pagamento = preco_venda_produto + taxa_entrega
     v_taxa_financeira = valor_base_pagamento * taxa_percentual
-    
     preco_venda_final = valor_base_pagamento + v_taxa_financeira
 
     # --- EXIBIÇÃO ---
@@ -181,25 +189,9 @@ def main():
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
-        
         df_resumo = pd.DataFrame({
-            "Item": [
-                "Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", 
-                "Embalagem", "Custo Produção", "Lucro", 
-                f"Taxa Entrega ({distancia_km}km)", f"Taxa Financeira ({forma_pagamento})", 
-                "TOTAL A COBRAR"
-            ],
-            "Valor": [
-                f"R$ {custo_ingredientes_total:.2f}",
-                f"R$ {v_quebra:.2f}",
-                f"R$ {v_despesas:.2f}",
-                f"R$ {valor_embalagem:.2f}",
-                f"R$ {custo_total_prod:.2f}",
-                f"R$ {lucro_valor:.2f}",
-                f"R$ {taxa_entrega:.2f}",
-                f"R$ {v_taxa_financeira:.2f}",
-                f"R$ {preco_venda_final:.2f}"
-            ]
+            "Item": ["Total Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Taxa Entrega ({val_dist}km)", f"Taxa Financeira ({forma_pagamento})", "TOTAL A COBRAR"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {val_emb:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -217,8 +209,8 @@ def main():
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Preço do Produto:</b> R$ {preco_venda_produto:.2f}</p>
-            <p><b>Distância:</b> {distancia_km} km</p>
-            <p><b>Frete:</b> R$ {taxa_entrega:.2f} <small>(Isento até 5km)</small></p>
+            <p><b>Distância:</b> {val_dist} km</p>
+            <p><b>Frete:</b> R$ {taxa_entrega:.2f}</p>
             <p><b>Seu Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
         </div>
         """, unsafe_allow_html=True)
