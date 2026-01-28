@@ -39,7 +39,7 @@ with st.sidebar:
 def main():
     df_ing = carregar_ingredientes()
 
-    st.markdown("<h1 class='titulo-planilha'>📊 Precificador & Orçamento</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 class='titulo-planilha'>📊 Precificador & Orçamento Profissional</h1>", unsafe_allow_html=True)
     
     # --- INPUTS DE CABEÇALHO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
@@ -61,10 +61,18 @@ def main():
             with c2: qtd = st.number_input(f"Qtd", min_value=0.0, value=None, key=f"p_q_{i}", placeholder="0.0")
             with c3: unid = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"p_u_{i}")
             
+            # Cálculo de Custo Corrigido
             dados = df_ing[df_ing['nome'] == item].iloc[0]
             val_q = qtd if qtd is not None else 0.0
-            fator = 0.001 if (unid == "g" and dados['unidade'] == "kg") or (unid == "ml" and dados['unidade'] == "l") else 1000 if (unid == "kg" and dados['unidade'] == "g") or (unid == "l" and dados['unidade'] == "ml") else 1.0
-            custo_parcial = (val_q * faktor) * dados['preco']
+            base_u = str(dados['unidade']).lower().strip()
+            
+            fator = 1.0
+            if unid == "g" and base_u == "kg": fator = 0.001
+            elif unid == "kg" and base_u == "g": fator = 1000.0
+            elif unid == "ml" and base_u == "l": fator = 0.001
+            elif unid == "l" and base_u == "ml": fator = 1000.0
+            
+            custo_parcial = (val_q * fator) * float(dados['preco'])
             custo_ing += custo_parcial
             with c4: st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
@@ -79,20 +87,16 @@ def main():
     v_e = v_emb if v_emb is not None else 0.0
     taxa_e = (v_dist - km_gratis) * valor_por_km if v_dist > km_gratis else 0.0
     
-    # CMV e Custos
     v_q = custo_ing * (p_quebra / 100)
     v_f = custo_ing * (p_fixo / 100)
     cmv_v = custo_ing + v_q + v_e
     
-    # Preço de Venda (Produto)
     preco_p = (cmv_v + v_f) * (1 + margem/100)
     
-    # Taxas Financeiras
     t_f = (taxa_credito_input/100 if pgto == "Crédito" else taxa_debito_input/100 if pgto == "Débito" else 0.0)
     v_taxa_f = (preco_p + taxa_e) * t_f
     preco_final = preco_p + taxa_e + v_taxa_f
     
-    # CMV Percentual
     cmv_p = (cmv_v / preco_p * 100) if preco_p > 0 else 0.0
 
     # --- EXIBIÇÃO ---
@@ -101,7 +105,7 @@ def main():
     with r1:
         st.markdown("### Detalhamento Financeiro")
         df_res = pd.DataFrame({
-            "Item": ["Custo Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Entrega ({v_dist}km)", f"Taxa {pgto}", "TOTAL"],
+            "Item": ["Custo Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro Bruto", f"Entrega ({v_dist}km)", f"Taxa {pgto}", "TOTAL"],
             "Valor": [f"R$ {custo_ing:.2f}", f"R$ {v_q:.2f}", f"R$ {v_f:.2f}", f"R$ {v_e:.2f}", f"R$ {cmv_v + v_f:.2f}", f"R$ {preco_p - (cmv_v + v_f):.2f}", f"R$ {taxa_e:.2f}", f"R$ {v_taxa_f:.2f}", f"R$ {preco_final:.2f}"]
         })
         st.table(df_res)
@@ -119,7 +123,7 @@ def main():
             </div>
         """, unsafe_allow_html=True)
         
-        # --- BOTÃO GERAR PEDIDO PARA WHATSAPP ---
+        # --- BOTÃO DE ORÇAMENTO WHATSAPP ---
         st.write("")
         nome_display = nome_prod if nome_prod else "[Nome do Produto]"
         texto_whats = (
@@ -133,7 +137,7 @@ def main():
         link_whats = f"https://wa.me/?text={urllib.parse.quote(texto_whats)}"
         st.markdown(f"""
             <a href="{link_whats}" target="_blank" style="text-decoration: none;">
-                <div style="background-color: #25D366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; font-size: 16px;">
+                <div style="background-color: #25D366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; font-size: 16px; cursor: pointer;">
                     📲 Gerar Pedido para WhatsApp
                 </div>
             </a>
