@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. Configuração da Página - Identidade do App
+# 1. Configuração da Página - Inicia fechada como solicitado
 st.set_page_config(
     page_title="Precificador", 
     page_icon="📊", 
@@ -10,12 +10,11 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilização CSS para visual de App Profissional
+# 2. Estilização CSS - REMOVIDO 'header {visibility: hidden;}' para a flecha aparecer
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     
     .titulo-planilha { 
         color: #1e3a8a; 
@@ -182,25 +181,19 @@ def main():
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = valor_embalagem if valor_embalagem is not None else 0.0
 
-    # Frete baseado nos valores da Sidebar
     taxa_entrega = (val_dist - km_gratis) * valor_por_km if val_dist > km_gratis else 0.0
 
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
-    # CMV (Custo Direto: Ingredientes + Quebra + Embalagem)
     v_cmv_direto = custo_ingredientes_total + v_quebra + val_emb
-    
     custo_total_prod = v_cmv_direto + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
-    
     preco_venda_produto = custo_total_prod + lucro_valor
     
-    # Porcentagem CMV
     perc_cmv = (v_cmv_direto / preco_venda_produto * 100) if preco_venda_produto > 0 else 0.0
     cor_cmv = "#4ade80" if perc_cmv <= 35 else "#facc15" if perc_cmv <= 45 else "#f87171"
 
-    # Taxas da Maquininha baseadas na Sidebar
     if forma_pagamento == "Débito": t_percentual = taxa_debito_input / 100
     elif forma_pagamento == "Crédito": t_percentual = taxa_credito_input / 100
     else: t_percentual = 0.0
