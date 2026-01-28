@@ -2,13 +2,32 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. Configuração da Página
-st.set_page_config(page_title="Precificador", page_icon="📊", layout="wide")
+# 1. Configuração da Página - Sidebar inicia recolhida (collapsed)
+st.set_page_config(
+    page_title="Precificador", 
+    page_icon="📊", 
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
 # 2. Estilização CSS
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    
+    /* Estilo do botão discreto para abrir as taxas */
+    .stButton>button {
+        border-radius: 20px;
+        border: 1px solid #1e3a8a;
+        background-color: transparent;
+        color: #1e3a8a;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #1e3a8a;
+        color: white;
+    }
+    
     .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; text-align: center; }
     .resultado-box { 
         background-color: #262730; 
@@ -30,19 +49,28 @@ def carregar_ingredientes():
 # --- SIDEBAR: PAINEL DE TAXAS ---
 with st.sidebar:
     st.header("⚙️ Ajuste de Taxas")
-    st.subheader("Maquininha")
+    st.write("---")
+    st.subheader("💳 Maquininha")
     taxa_debito_input = st.number_input("Taxa Débito (%)", value=1.99, step=0.01)
     taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
     
-    st.subheader("Entrega")
+    st.write("---")
+    st.subheader("🚚 Entrega")
     km_gratis = st.number_input("KM Isentos", value=5)
     valor_por_km = st.number_input("Valor por KM adicional", value=2.0, step=0.5)
     
-    st.info("Estas taxas serão aplicadas nos cálculos ao lado.")
+    if st.sidebar.button("Fechar Painel"):
+        st.write("Clique na seta no topo para fechar.")
 
-# --- APP ---
+# --- APP PRINCIPAL ---
 def main():
     df_ing = carregar_ingredientes()
+
+    # Botão Discreto no topo para abrir a sidebar
+    col_btn1, col_btn2 = st.columns([8, 2])
+    with col_btn2:
+        if st.button("⚙️ Configurar Taxas"):
+            st.warning("Use a seta no canto superior esquerdo para abrir/fechar as taxas.")
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador Profissional</h1>", unsafe_allow_html=True)
 
@@ -95,13 +123,11 @@ def main():
         perc_despesas = st.slider("Fixo/Geral (%)", 0, 100, 30)
         v_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, placeholder="0.0")
 
-    # --- CÁLCULOS UTILIZANDO AS TAXAS DA SIDEBAR ---
+    # --- CÁLCULOS ---
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = v_embalagem if v_embalagem is not None else 0.0
     
-    # Cálculo Entrega usando valores da sidebar
     taxa_entrega = (val_dist - km_gratis) * valor_por_km if val_dist > km_gratis else 0.0
-    
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
@@ -110,17 +136,12 @@ def main():
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_produto = custo_total_prod + lucro_valor
     
-    # Cálculo Taxa Financeira usando valores da sidebar
-    if forma_pagamento == "Débito":
-        t_fin = taxa_debito_input / 100
-    elif forma_pagamento == "Crédito":
-        t_fin = taxa_credito_input / 100
-    else:
-        t_fin = 0.0
+    if forma_pagamento == "Débito": t_fin = taxa_debito_input / 100
+    elif forma_pagamento == "Crédito": t_fin = taxa_credito_input / 100
+    else: t_fin = 0.0
         
     v_taxa_fin = (preco_produto + taxa_entrega) * t_fin
     preco_final = preco_produto + taxa_entrega + v_taxa_fin
-    
     cmv_percentual = (cmv_valor / preco_produto) * 100 if preco_produto > 0 else 0
 
     # --- EXIBIÇÃO ---
@@ -143,7 +164,7 @@ def main():
             <hr>
             <p><b>CMV:</b> <span style='color:{cor_cmv};'>{cmv_percentual:.1f}%</span></p>
             <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-            <p><small>*Taxas aplicadas via painel lateral.</small></p>
+            <p><small>*Taxas de {taxa_credito_input}% Cred / {taxa_debito_input}% Déb aplicadas.</small></p>
         </div>
         """, unsafe_allow_html=True)
 
