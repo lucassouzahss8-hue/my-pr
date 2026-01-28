@@ -94,10 +94,10 @@ def main():
             
             val_q = qtd if qtd is not None else 0.0
             fator = 1.0
-            if unid == "g" and base_u == "kg": fator = 0.001
-            elif unid == "kg" and base_u == "g": fator = 1000.0
-            elif unid == "ml" and base_u == "l": fator = 0.001
-            elif unid == "l" and base_u == "ml": fator = 1000.0
+            if unid == "g" and base_u == "kg": fator = 1/1000
+            elif unid == "kg" and base_u == "g": fator = 1000
+            elif unid == "ml" and base_u == "l": fator = 1/1000
+            elif unid == "l" and base_u == "ml": fator = 1000
             
             custo_item = (val_q * fator) * base_p
             custo_ingredientes_total += custo_item
@@ -118,7 +118,9 @@ def main():
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
+    # CMV (Custo Direto: Ingredientes + Quebra + Embalagem)
     cmv_valor = custo_ingredientes_total + v_quebra + val_emb
+    
     custo_total_prod = cmv_valor + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_produto = custo_total_prod + lucro_valor
@@ -130,6 +132,7 @@ def main():
     v_taxa_fin = (preco_produto + taxa_entrega) * t_fin
     preco_final = preco_produto + taxa_entrega + v_taxa_fin
     
+    # Cálculo da Porcentagem do CMV
     cmv_percentual = (cmv_valor / preco_produto) * 100 if preco_produto > 0 else 0.0
 
     # --- EXIBIÇÃO ---
@@ -137,6 +140,7 @@ def main():
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento Financeiro")
+        # Tabela permanece EXATAMENTE como você tinha
         df_res = pd.DataFrame({
             "Item": ["Custo Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Entrega ({val_dist}km)", f"Taxa {forma_pagamento}", "TOTAL"],
             "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {val_emb:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_fin:.2f}", f"R$ {preco_final:.2f}"]
@@ -144,6 +148,7 @@ def main():
         st.table(df_res)
 
     with res2:
+        # Sistema de Cores: Verde (até 35%), Amarelo (até 45%), Vermelho (acima)
         cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
         
         st.markdown(f"""
