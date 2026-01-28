@@ -36,6 +36,16 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- SIDEBAR: CONTROLE DE TAXAS ---
+with st.sidebar:
+    st.header("⚙️ Ajuste de Taxas")
+    st.divider()
+    taxa_debito_input = st.number_input("Taxa Débito (%)", value=1.99, step=0.01)
+    taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
+    st.divider()
+    km_gratis = st.number_input("KM Isentos", value=5)
+    valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
+
 # --- INICIALIZAÇÃO DO ESTADO ---
 if "n_itens" not in st.session_state:
     st.session_state.n_itens = 1
@@ -127,11 +137,11 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        n_itens = st.number_input("Número de itens:", min_value=1, key="n_itens")
+        n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens")
         custo_ingredientes_total = 0.0
         lista_para_salvar = []
 
-        for i in range(int(n_itens)):
+        for i in range(int(n_itens_input)):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
             with c1:
                 default_index = 0
@@ -172,7 +182,8 @@ def main():
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = valor_embalagem if valor_embalagem is not None else 0.0
 
-    taxa_entrega = (val_dist - 5) * 2 if val_dist > 5 else 0.0
+    # Frete baseado nos valores da Sidebar
+    taxa_entrega = (val_dist - km_gratis) * valor_por_km if val_dist > km_gratis else 0.0
 
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
@@ -189,13 +200,13 @@ def main():
     perc_cmv = (v_cmv_direto / preco_venda_produto * 100) if preco_venda_produto > 0 else 0.0
     cor_cmv = "#4ade80" if perc_cmv <= 35 else "#facc15" if perc_cmv <= 45 else "#f87171"
 
-    # Taxas da Maquininha
-    taxa_percentual = 0.0
-    if forma_pagamento == "Débito": taxa_percentual = 0.0199 
-    elif forma_pagamento == "Crédito": taxa_percentual = 0.0499 
+    # Taxas da Maquininha baseadas na Sidebar
+    if forma_pagamento == "Débito": t_percentual = taxa_debito_input / 100
+    elif forma_pagamento == "Crédito": t_percentual = taxa_credito_input / 100
+    else: t_percentual = 0.0
     
     valor_base_taxa = preco_venda_produto + taxa_entrega
-    v_taxa_financeira = valor_base_taxa * taxa_percentual
+    v_taxa_financeira = valor_base_taxa * t_percentual
     preco_venda_final = valor_base_taxa + v_taxa_financeira
 
     # --- TABELA E QUADRADO DE RESULTADOS ---
