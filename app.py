@@ -1,34 +1,19 @@
 import streamlit as st
 import pandas as pd
 import os
+import urllib.parse
 
 # 1. Configuração da Página
-st.set_page_config(
-    page_title="Precificador", 
-    page_icon="📊", 
-    layout="wide"
-)
+st.set_page_config(page_title="Precificador", page_icon="📊", layout="wide")
 
 # 2. Estilização CSS
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    
-    .titulo-planilha { 
-        color: #1e3a8a; 
-        font-weight: bold; 
-        border-bottom: 2px solid #1e3a8a; 
-        margin-bottom: 20px; 
-        text-align: center; 
-    }
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
+    .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; text-align: center; }
     .resultado-box { 
-        background-color: #262730; 
-        padding: 25px; 
-        border-radius: 15px; 
-        border-left: 10px solid #1e3a8a; 
-        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
-        color: white; 
+        background-color: #262730; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; 
+        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); color: white; 
     }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
     </style>
@@ -40,126 +25,118 @@ def carregar_ingredientes():
         df = pd.read_csv("ingredientes.csv")
         df.columns = df.columns.str.strip().str.lower()
         return df
-    except:
-        return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
+    except: return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
-# --- SIDEBAR: CONFIGURAÇÕES DE TAXAS ---
+# --- SIDEBAR: TAXAS ---
 with st.sidebar:
     st.header("⚙️ Ajuste de Taxas")
-    st.divider()
     taxa_debito_input = st.number_input("Taxa Débito (%)", value=1.99, step=0.01)
     taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
     st.divider()
     km_gratis = st.number_input("KM Isentos", value=5)
     valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.5)
 
-# --- APP PRINCIPAL ---
 def main():
     df_ing = carregar_ingredientes()
 
-    st.markdown("<h1 class='titulo-planilha'>📊 Precificador Profissional</h1>", unsafe_allow_html=True)
-
+    st.markdown("<h1 class='titulo-planilha'>📊 Precificador & Orçamento</h1>", unsafe_allow_html=True)
+    
     # --- INPUTS DE CABEÇALHO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
-    with col_p1:
-        nome_produto_final = st.text_input("Nome do Produto:", key="nome_prod", placeholder="Ex: Brownie Recheado")
-    with col_p2:
-        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
-    with col_p3:
-        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, placeholder="Ex: 7.0")
-    with col_p4:
-        forma_pagamento = st.selectbox("Pagamento", ["PIX", "Débito", "Crédito"])
+    with col_p1: nome_prod = st.text_input("Nome do Produto:", key="n_prod", placeholder="Ex: Brownie Recheado")
+    with col_p2: margem = st.number_input("Margem (%)", min_value=0, value=150)
+    with col_p3: dist = st.number_input("Distância (km)", min_value=0.0, value=None, placeholder="0.0")
+    with col_p4: pgto = st.selectbox("Pagamento", ["PIX", "Débito", "Crédito"])
 
     st.divider()
-
-    # --- MONTAGEM DA RECEITA ---
     col_esq, col_dir = st.columns([2, 1])
+    
     with col_esq:
         st.subheader("🛒 Ingredientes")
         n_itens = st.number_input("Itens na receita:", min_value=1, value=1)
-        custo_ingredientes_total = 0.0
-        
+        custo_ing = 0.0
         for i in range(int(n_itens)):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
-            with c1:
-                escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"n_{i}")
-            with c2:
-                qtd = st.number_input(f"Qtd", min_value=0.0, key=f"q_{i}", value=None, placeholder="0.0")
-            with c3:
-                unid = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+            with c1: item = st.selectbox(f"Item {i+1}", df_ing['nome'].tolist(), key=f"p_n_{i}")
+            with c2: qtd = st.number_input(f"Qtd", min_value=0.0, value=None, key=f"p_q_{i}", placeholder="0.0")
+            with c3: unid = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"p_u_{i}")
             
-            dados = df_ing[df_ing['nome'] == escolha].iloc[0]
-            base_p = float(dados['preco'])
-            base_u = str(dados['unidade']).lower().strip()
-            
+            dados = df_ing[df_ing['nome'] == item].iloc[0]
             val_q = qtd if qtd is not None else 0.0
-            fator = 1.0
-            if unid == "g" and base_u == "kg": fator = 1/1000
-            elif unid == "kg" and base_u == "g": fator = 1000
-            elif unid == "ml" and base_u == "l": fator = 1/1000
-            elif unid == "l" and base_u == "ml": fator = 1000
-            
-            custo_item = (val_q * fator) * base_p
-            custo_ingredientes_total += custo_item
-            with c4: 
-                st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_item:.2f}</p>", unsafe_allow_html=True)
+            fator = 0.001 if (unid == "g" and dados['unidade'] == "kg") or (unid == "ml" and dados['unidade'] == "l") else 1000 if (unid == "kg" and dados['unidade'] == "g") or (unid == "l" and dados['unidade'] == "ml") else 1.0
+            custo_parcial = (val_q * faktor) * dados['preco']
+            custo_ing += custo_parcial
+            with c4: st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
-        perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
-        perc_despesas = st.slider("Fixos (%)", 0, 100, 30)
-        v_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, placeholder="0.0")
+        p_quebra = st.slider("Quebra (%)", 0, 15, 5)
+        p_fixo = st.slider("Despesas Fixas (%)", 0, 100, 30)
+        v_emb = st.number_input("Embalagem (R$)", min_value=0.0, value=None, placeholder="0.0")
 
     # --- CÁLCULOS ---
-    val_dist = distancia_km if distancia_km is not None else 0.0
-    val_emb = v_embalagem if v_embalagem is not None else 0.0
+    v_dist = dist if dist is not None else 0.0
+    v_e = v_emb if v_emb is not None else 0.0
+    taxa_e = (v_dist - km_gratis) * valor_por_km if v_dist > km_gratis else 0.0
     
-    taxa_entrega = (val_dist - km_gratis) * valor_por_km if val_dist > km_gratis else 0.0
-    v_quebra = custo_ingredientes_total * (perc_quebra / 100)
-    v_despesas = custo_ingredientes_total * (perc_despesas / 100)
+    # CMV e Custos
+    v_q = custo_ing * (p_quebra / 100)
+    v_f = custo_ing * (p_fixo / 100)
+    cmv_v = custo_ing + v_q + v_e
     
-    # CMV (Custo Direto: Ingredientes + Quebra + Embalagem)
-    cmv_valor = custo_ingredientes_total + v_quebra + val_emb
+    # Preço de Venda (Produto)
+    preco_p = (cmv_v + v_f) * (1 + margem/100)
     
-    custo_total_prod = cmv_valor + v_despesas
-    lucro_valor = custo_total_prod * (margem_lucro / 100)
-    preco_produto = custo_total_prod + lucro_valor
+    # Taxas Financeiras
+    t_f = (taxa_credito_input/100 if pgto == "Crédito" else taxa_debito_input/100 if pgto == "Débito" else 0.0)
+    v_taxa_f = (preco_p + taxa_e) * t_f
+    preco_final = preco_p + taxa_e + v_taxa_f
     
-    if forma_pagamento == "Débito": t_fin = taxa_debito_input / 100
-    elif forma_pagamento == "Crédito": t_fin = taxa_credito_input / 100
-    else: t_fin = 0.0
-        
-    v_taxa_fin = (preco_produto + taxa_entrega) * t_fin
-    preco_final = preco_produto + taxa_entrega + v_taxa_fin
-    
-    # Cálculo da Porcentagem do CMV
-    cmv_percentual = (cmv_valor / preco_produto) * 100 if preco_produto > 0 else 0.0
+    # CMV Percentual
+    cmv_p = (cmv_v / preco_p * 100) if preco_p > 0 else 0.0
 
     # --- EXIBIÇÃO ---
     st.divider()
-    res1, res2 = st.columns([1.5, 1])
-    with res1:
-        st.markdown(f"### Detalhamento Financeiro")
-        # Tabela permanece EXATAMENTE como você tinha
+    r1, r2 = st.columns([1.5, 1])
+    with r1:
+        st.markdown("### Detalhamento Financeiro")
         df_res = pd.DataFrame({
-            "Item": ["Custo Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Entrega ({val_dist}km)", f"Taxa {forma_pagamento}", "TOTAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {val_emb:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_fin:.2f}", f"R$ {preco_final:.2f}"]
+            "Item": ["Custo Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Entrega ({v_dist}km)", f"Taxa {pgto}", "TOTAL"],
+            "Valor": [f"R$ {custo_ing:.2f}", f"R$ {v_q:.2f}", f"R$ {v_f:.2f}", f"R$ {v_e:.2f}", f"R$ {cmv_v + v_f:.2f}", f"R$ {preco_p - (cmv_v + v_f):.2f}", f"R$ {taxa_e:.2f}", f"R$ {v_taxa_f:.2f}", f"R$ {preco_final:.2f}"]
         })
         st.table(df_res)
 
-    with res2:
-        # Sistema de Cores: Verde (até 35%), Amarelo (até 45%), Vermelho (acima)
-        cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
-        
+    with r2:
+        cor = "#4ade80" if cmv_p <= 35 else "#facc15" if cmv_p <= 45 else "#f87171"
         st.markdown(f"""
-        <div class='resultado-box'>
-            <p style='margin:0; font-size:14px; opacity: 0.8;'>{nome_produto_final.upper() if nome_produto_final else 'PRODUTO'}</p>
-            <h2 style='margin:0;'>TOTAL A COBRAR</h2>
-            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_final:.2f}</h1>
-            <hr style='border-color: #4b5563;'>
-            <p style='font-size: 22px;'>CMV: <span style='color:{cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
-            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-        </div>
+            <div class='resultado-box'>
+                <p style='margin:0; font-size:14px; opacity: 0.8;'>{nome_prod.upper() if nome_prod else 'ORÇAMENTO'}</p>
+                <h2 style='margin:0;'>TOTAL A COBRAR</h2>
+                <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_final:.2f}</h1>
+                <hr style='border-color: #4b5563;'>
+                <p style='font-size: 22px;'>CMV: <span style='color:{cor}; font-weight: bold;'>{cmv_p:.1f}%</span></p>
+                <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {preco_p - (cmv_v + v_f):.2f}</span></p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # --- BOTÃO GERAR PEDIDO PARA WHATSAPP ---
+        st.write("")
+        nome_display = nome_prod if nome_prod else "[Nome do Produto]"
+        texto_whats = (
+            f"Olá! Segue o orçamento para *{nome_display}*:\n\n"
+            f"Valor unitário: R$ {preco_p:.2f}\n"
+            f"Entrega ({v_dist} km): R$ {taxa_e:.2f}\n"
+            f"*Total: R$ {preco_final:.2f}* (Pagamento via {pgto})\n\n"
+            f"Aguardamos seu pedido!"
+        )
+        
+        link_whats = f"https://wa.me/?text={urllib.parse.quote(texto_whats)}"
+        st.markdown(f"""
+            <a href="{link_whats}" target="_blank" style="text-decoration: none;">
+                <div style="background-color: #25D366; color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; font-size: 16px;">
+                    📲 Gerar Pedido para WhatsApp
+                </div>
+            </a>
         """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
