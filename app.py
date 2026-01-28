@@ -111,10 +111,8 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod", placeholder="Ex: Bolo de Pote")
     with col_p2:
-        # Mantendo margem de lucro como estava (padrão 150)
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_p3:
-        # Distância em branco (None)
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, step=0.1, placeholder="Ex: 8.0")
     with col_p4:
         forma_pagamento = st.selectbox("Pagamento", ["PIX", "Débito", "Crédito"])
@@ -147,7 +145,6 @@ def main():
             preco_base = float(dados_item['preco'])
 
             with c2:
-                # Quantidade em branco (None)
                 qtd_usada = st.number_input(f"Qtd", min_value=0.0, key=f"qtd_{i}", step=0.01, value=None, placeholder="0.0")
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
@@ -169,23 +166,29 @@ def main():
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-        # Embalagem em branco (None)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, step=0.1, placeholder="0.0")
 
     # --- CÁLCULOS FINAIS ---
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = valor_embalagem if valor_embalagem is not None else 0.0
 
-    # Frete: R$ 2,00 por cada km que passar de 5km
     taxa_entrega = (val_dist - 5) * 2 if val_dist > 5 else 0.0
 
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
-    custo_total_prod = custo_ingredientes_total + v_quebra + v_despesas + val_emb
+    
+    # CMV (Custo Direto: Ingredientes + Quebra + Embalagem)
+    v_cmv_direto = custo_ingredientes_total + v_quebra + val_emb
+    
+    custo_total_prod = v_cmv_direto + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     
     preco_venda_produto = custo_total_prod + lucro_valor
     
+    # Porcentagem CMV
+    perc_cmv = (v_cmv_direto / preco_venda_produto * 100) if preco_venda_produto > 0 else 0.0
+    cor_cmv = "#4ade80" if perc_cmv <= 35 else "#facc15" if perc_cmv <= 45 else "#f87171"
+
     # Taxas da Maquininha
     taxa_percentual = 0.0
     if forma_pagamento == "Débito": taxa_percentual = 0.0199 
@@ -219,6 +222,7 @@ def main():
             <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
+            <p style='font-size: 22px;'>CMV: <span style='color:{cor_cmv}; font-weight: bold;'>{perc_cmv:.1f}%</span></p>
             <p><b>Preço do Produto:</b> R$ {preco_venda_produto:.2f}</p>
             <p><b>Entrega:</b> R$ {taxa_entrega:.2f}</p>
             <p><b>Seu Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
