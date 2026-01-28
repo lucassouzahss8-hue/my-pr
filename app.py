@@ -2,39 +2,39 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. Configuração da Página - Sidebar inicia recolhida (collapsed)
+# 1. Configuração da Página - Sidebar agora disponível para o usuário abrir
 st.set_page_config(
     page_title="Precificador", 
     page_icon="📊", 
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
 
-# 2. Estilização CSS
+# 2. Estilização CSS (Ajustado para permitir ver a seta da sidebar)
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
+    /* Esconde apenas o menu de opções e o footer, mas mantém o cabeçalho da seta */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     
-    /* Estilo do botão discreto para abrir as taxas */
-    .stButton>button {
-        border-radius: 20px;
-        border: 1px solid #1e3a8a;
-        background-color: transparent;
-        color: #1e3a8a;
-        transition: 0.3s;
+    .titulo-planilha { 
+        color: #1e3a8a; 
+        font-weight: bold; 
+        border-bottom: 2px solid #1e3a8a; 
+        margin-bottom: 20px; 
+        text-align: center; 
     }
-    .stButton>button:hover {
-        background-color: #1e3a8a;
-        color: white;
-    }
-    
-    .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; text-align: center; }
     .resultado-box { 
         background-color: #262730; 
-        padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; 
-        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); color: white; 
+        padding: 25px; 
+        border-radius: 15px; 
+        border-left: 10px solid #1e3a8a; 
+        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
+        color: white; 
     }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
+    
+    /* Garante que a barra lateral tenha um estilo claro */
+    .css-1d391kg { background-color: #f0f2f6; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -46,31 +46,24 @@ def carregar_ingredientes():
         return df
     except: return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
-# --- SIDEBAR: PAINEL DE TAXAS ---
+# --- SIDEBAR: PAINEL DE TAXAS (Acessível pela seta >) ---
 with st.sidebar:
     st.header("⚙️ Ajuste de Taxas")
-    st.write("---")
+    st.write("Ajuste os valores abaixo e os cálculos serão atualizados automaticamente.")
+    st.divider()
+    
     st.subheader("💳 Maquininha")
     taxa_debito_input = st.number_input("Taxa Débito (%)", value=1.99, step=0.01)
     taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
     
-    st.write("---")
+    st.divider()
     st.subheader("🚚 Entrega")
     km_gratis = st.number_input("KM Isentos", value=5)
-    valor_por_km = st.number_input("Valor por KM adicional", value=2.0, step=0.5)
-    
-    if st.sidebar.button("Fechar Painel"):
-        st.write("Clique na seta no topo para fechar.")
+    valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.5)
 
 # --- APP PRINCIPAL ---
 def main():
     df_ing = carregar_ingredientes()
-
-    # Botão Discreto no topo para abrir a sidebar
-    col_btn1, col_btn2 = st.columns([8, 2])
-    with col_btn2:
-        if st.button("⚙️ Configurar Taxas"):
-            st.warning("Use a seta no canto superior esquerdo para abrir/fechar as taxas.")
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador Profissional</h1>", unsafe_allow_html=True)
 
@@ -115,7 +108,7 @@ def main():
             
             custo_item = (val_q * fator) * base_p
             custo_ingredientes_total += custo_item
-            with c4: st.markdown(f"<p style='padding-top:35px;'>R$ {custo_item:.2f}</p>", unsafe_allow_html=True)
+            with c4: st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_item:.2f}</p>", unsafe_allow_html=True)
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
@@ -150,7 +143,7 @@ def main():
     with res1:
         st.markdown("### Detalhamento Financeiro")
         df_res = pd.DataFrame({
-            "Item": ["CMV (Custos Diretos)", "Custos Fixos", "Lucro Bruto", "Entrega", f"Taxa {forma_pagamento}", "TOTAL"],
+            "Item": ["CMV (Custos Diretos)", "Custos Fixos", "Lucro Desejado", "Entrega", f"Taxa {forma_pagamento}", "TOTAL"],
             "Valor": [f"R$ {cmv_valor:.2f}", f"R$ {v_despesas:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_fin:.2f}", f"R$ {preco_final:.2f}"]
         })
         st.table(df_res)
@@ -164,7 +157,6 @@ def main():
             <hr>
             <p><b>CMV:</b> <span style='color:{cor_cmv};'>{cmv_percentual:.1f}%</span></p>
             <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-            <p><small>*Taxas de {taxa_credito_input}% Cred / {taxa_debito_input}% Déb aplicadas.</small></p>
         </div>
         """, unsafe_allow_html=True)
 
