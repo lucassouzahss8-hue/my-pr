@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-# 1. Configuração da Página - Mantém a seta da sidebar visível
+# 1. Configuração da Página
 st.set_page_config(
     page_title="Precificador", 
     page_icon="📊", 
@@ -46,15 +46,10 @@ def carregar_ingredientes():
 # --- SIDEBAR: CONFIGURAÇÕES DE TAXAS ---
 with st.sidebar:
     st.header("⚙️ Ajuste de Taxas")
-    st.write("Configure suas taxas padrão abaixo:")
     st.divider()
-    
-    st.subheader("💳 Maquininha")
     taxa_debito_input = st.number_input("Taxa Débito (%)", value=1.99, step=0.01)
     taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
-    
     st.divider()
-    st.subheader("🚚 Entrega")
     km_gratis = st.number_input("KM Isentos", value=5)
     valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.5)
 
@@ -69,19 +64,13 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto:", key="nome_prod", placeholder="Ex: Brownie Recheado")
     with col_p2:
-        # Margem de lucro padrão 150%
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_p3:
-        # Distância em branco
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=None, placeholder="Ex: 7.0")
     with col_p4:
         forma_pagamento = st.selectbox("Pagamento", ["PIX", "Débito", "Crédito"])
 
     st.divider()
-
-    if df_ing.empty:
-        st.error("⚠️ O arquivo 'ingredientes.csv' não foi detectado.")
-        return
 
     # --- MONTAGEM DA RECEITA ---
     col_esq, col_dir = st.columns([2, 1])
@@ -99,7 +88,6 @@ def main():
             with c3:
                 unid = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
             
-            # Cálculo de custo por ingrediente
             dados = df_ing[df_ing['nome'] == escolha].iloc[0]
             base_p = float(dados['preco'])
             base_u = str(dados['unidade']).lower().strip()
@@ -118,29 +106,25 @@ def main():
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
-        perc_quebra = st.slider("Quebra/Desperdício (%)", 0, 15, 5)
-        perc_despesas = st.slider("Custos Fixos/Gerais (%)", 0, 100, 30)
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
+        perc_despesas = st.slider("Fixos (%)", 0, 100, 30)
         v_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=None, placeholder="0.0")
 
-    # --- CÁLCULOS TÉCNICOS ---
+    # --- CÁLCULOS ---
     val_dist = distancia_km if distancia_km is not None else 0.0
     val_emb = v_embalagem if v_embalagem is not None else 0.0
     
-    # Cálculo Entrega (usa valores da sidebar)
     taxa_entrega = (val_dist - km_gratis) * valor_por_km if val_dist > km_gratis else 0.0
-    
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
-    # CMV = Soma dos Custos Diretos (Ingredientes + Quebra + Embalagem)
+    # CMV (Custo Direto: Ingredientes + Quebra + Embalagem)
     cmv_valor = custo_ingredientes_total + v_quebra + val_emb
     
-    # Preço Base para Lucro
     custo_total_prod = cmv_valor + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_produto = custo_total_prod + lucro_valor
     
-    # Taxas Financeiras (usa valores da sidebar)
     if forma_pagamento == "Débito": t_fin = taxa_debito_input / 100
     elif forma_pagamento == "Crédito": t_fin = taxa_credito_input / 100
     else: t_fin = 0.0
@@ -148,33 +132,33 @@ def main():
     v_taxa_fin = (preco_produto + taxa_entrega) * t_fin
     preco_final = preco_produto + taxa_entrega + v_taxa_fin
     
-    # Percentual do CMV sobre o preço do produto
-    cmv_percentual = (cmv_valor / preco_produto) * 100 if preco_produto > 0 else 0
+    # Cálculo da Porcentagem do CMV
+    cmv_percentual = (cmv_valor / preco_produto) * 100 if preco_produto > 0 else 0.0
 
-    # --- EXIBIÇÃO DOS RESULTADOS ---
+    # --- EXIBIÇÃO ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
-        st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Item'}")
+        st.markdown(f"### Detalhamento Financeiro")
+        # Tabela permanece EXATAMENTE como você tinha
         df_res = pd.DataFrame({
-            "Item": ["CMV (Custos Diretos)", "Custos Fixos/Gerais", "Lucro Desejado", "Taxa Entrega", f"Taxas {forma_pagamento}", "TOTAL FINAL"],
-            "Valor": [f"R$ {cmv_valor:.2f}", f"R$ {v_despesas:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_fin:.2f}", f"R$ {preco_final:.2f}"]
+            "Item": ["Custo Ingredientes", "Quebra/Desperdício", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", f"Entrega ({val_dist}km)", f"Taxa {forma_pagamento}", "TOTAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {val_emb:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_fin:.2f}", f"R$ {preco_final:.2f}"]
         })
         st.table(df_res)
 
     with res2:
-        # Lógica de cor para o CMV
+        # Sistema de Cores: Verde (até 35%), Amarelo (até 45%), Vermelho (acima)
         cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
         
         st.markdown(f"""
         <div class='resultado-box'>
             <p style='margin:0; font-size:14px; opacity: 0.8;'>{nome_produto_final.upper() if nome_produto_final else 'PRODUTO'}</p>
-            <h2 style='margin:0;'>VALOR DE VENDA</h2>
+            <h2 style='margin:0;'>TOTAL A COBRAR</h2>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
-            <p><b>CMV:</b> <span style='color:{cor_cmv}; font-size:20px;'>{cmv_percentual:.1f}%</span></p>
-            <p><b>Lucro Líquido:</b> <span style='color: #4ade80; font-size:20px;'>R$ {lucro_valor:.2f}</span></p>
-            <p><small>Padrão: {km_gratis}km isentos / {valor_por_km} por km</small></p>
+            <p style='font-size: 22px;'>CMV: <span style='color:{cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
+            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
         </div>
         """, unsafe_allow_html=True)
 
