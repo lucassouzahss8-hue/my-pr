@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilização CSS Original (Flecha da sidebar visível)
+# 2. Estilização CSS Original
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -34,8 +34,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONEXÃO BANCO DE DADOS (NUVEM VIA SECRETS) ---
-# O app buscará as credenciais automaticamente no "Secrets" do Streamlit Cloud
+# --- CONEXÃO BANCO DE DADOS ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- SIDEBAR: CONTROLE DE TAXAS ---
@@ -65,8 +64,11 @@ def carregar_ingredientes():
 
 def carregar_receitas_nuvem():
     try:
-        # Lê os dados da planilha configurada nos Secrets
-        return conn.read()
+        df = conn.read()
+        # Se a planilha estiver vazia, retorna estrutura padrão para evitar KeyError
+        if df.empty or 'nome_receita' not in df.columns:
+            return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
+        return df
     except:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
@@ -85,6 +87,7 @@ def main():
             receita_selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
         with col_rec2:
             st.write("") 
+            st.write("") 
             if st.button("🔄 Carregar", use_container_width=True):
                 if receita_selecionada != "":
                     dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
@@ -99,7 +102,6 @@ def main():
                 if receita_selecionada != "":
                     df_final = df_rec[df_rec['nome_receita'] != receita_selecionada]
                     conn.update(data=df_final)
-                    st.success("Receita excluída da nuvem!")
                     st.rerun()
 
     # --- CONFIGURAÇÕES DO PRODUTO ---
@@ -202,8 +204,12 @@ def main():
         if st.button("💾 Salvar Receita"):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                # Atualiza os dados na planilha nuvem
-                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
+                # Verifica se a receita já existe e remove para atualizar
+                if not df_rec.empty and 'nome_receita' in df_rec.columns:
+                    df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
+                else:
+                    df_final = df_nova
+                
                 conn.update(data=df_final)
                 st.success(f"Receita '{nome_produto_final}' salva na nuvem!")
                 st.rerun()
