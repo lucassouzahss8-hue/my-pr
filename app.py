@@ -23,7 +23,7 @@ st.markdown("""
 
 # 3. Conexão com Google Sheets
 # Importante: No Streamlit Cloud, adicione o link da planilha em "Secrets"
-url = "COLE_AQUI_O_LINK_DA_SUA_PLANILHA_GOOGLE"
+url = "https://docs.google.com/spreadsheets/d/1vGdKKfDRwiN0JSyi4Z0eC_mE3fW__rIVZKQoMt7kbqo/edit?usp=drivesdk"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def carregar_ingredientes():
