@@ -53,7 +53,7 @@ if "n_itens" not in st.session_state:
 if "nome_prod" not in st.session_state:
     st.session_state.nome_prod = ""
 
-# --- FUNÇÕES DE DADOS ---
+# --- FUNÇÕES DE DADOS ATUALIZADAS ---
 def carregar_ingredientes():
     try:
         df = pd.read_csv("ingredientes.csv")
@@ -64,12 +64,15 @@ def carregar_ingredientes():
 
 def carregar_receitas_nuvem():
     try:
-        df = conn.read()
-        # Se a planilha estiver vazia, retorna estrutura padrão para evitar KeyError
-        if df.empty or 'nome_receita' not in df.columns:
+        # ttl=0 garante que ele não use cache e sempre leia o dado novo
+        df = conn.read(ttl=0)
+        
+        # Proteção contra planilha vazia ou sem as colunas corretas
+        if df is None or df.empty or 'nome_receita' not in df.columns:
             return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
+            
         return df
-    except:
+    except Exception:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
 # --- APP PRINCIPAL ---
@@ -102,6 +105,7 @@ def main():
                 if receita_selecionada != "":
                     df_final = df_rec[df_rec['nome_receita'] != receita_selecionada]
                     conn.update(data=df_final)
+                    st.success("Receita excluída!")
                     st.rerun()
 
     # --- CONFIGURAÇÕES DO PRODUTO ---
@@ -204,15 +208,18 @@ def main():
         if st.button("💾 Salvar Receita"):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                # Verifica se a receita já existe e remove para atualizar
+                # Verifica se a tabela já possui dados para concatenar corretamente
                 if not df_rec.empty and 'nome_receita' in df_rec.columns:
                     df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
                 else:
                     df_final = df_nova
                 
+                # Executa a atualização na planilha
                 conn.update(data=df_final)
                 st.success(f"Receita '{nome_produto_final}' salva na nuvem!")
                 st.rerun()
+            else:
+                st.warning("Dê um nome ao produto antes de salvar.")
 
     with res2:
         st.markdown(f"""
