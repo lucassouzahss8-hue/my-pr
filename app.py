@@ -34,7 +34,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- CONEXÃO BANCO DE DADOS ---
+# --- CONEXÃO BANCO DE DADOS (GOOGLE SHEETS) ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- SIDEBAR: CONTROLE DE TAXAS ---
@@ -53,24 +53,22 @@ if "n_itens" not in st.session_state:
 if "nome_prod" not in st.session_state:
     st.session_state.nome_prod = ""
 
-# --- FUNÇÕES DE DADOS ATUALIZADAS ---
+# --- FUNÇÕES DE DADOS (AGORA AMBAS NA NUVEM) ---
 def carregar_ingredientes():
     try:
-        df = pd.read_csv("ingredientes.csv")
+        # Lê a aba "Ingredientes" da planilha
+        df = conn.read(worksheet="Ingredientes", ttl=0)
         df.columns = df.columns.str.strip().str.lower()
         return df
-    except:
+    except Exception:
         return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
 def carregar_receitas_nuvem():
     try:
-        # ttl=0 garante que ele não use cache e sempre leia o dado novo
-        df = conn.read(ttl=0)
-        
-        # Proteção contra planilha vazia ou sem as colunas corretas
+        # Lê a aba "Receitas" da planilha
+        df = conn.read(worksheet="Receitas", ttl=0)
         if df is None or df.empty or 'nome_receita' not in df.columns:
             return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
-            
         return df
     except Exception:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
@@ -104,7 +102,7 @@ def main():
             if st.button("🗑️ Deletar", use_container_width=True):
                 if receita_selecionada != "":
                     df_final = df_rec[df_rec['nome_receita'] != receita_selecionada]
-                    conn.update(data=df_final)
+                    conn.update(worksheet="Receitas", data=df_final)
                     st.success("Receita excluída!")
                     st.rerun()
 
@@ -122,7 +120,7 @@ def main():
     st.divider()
 
     if df_ing.empty:
-        st.error("⚠️ O arquivo 'ingredientes.csv' não foi detectado.")
+        st.warning("⚠️ Adicione ingredientes na aba 'Ingredientes' da sua planilha Google.")
         return
 
     # --- INGREDIENTES ---
@@ -194,7 +192,7 @@ def main():
     v_taxa_financeira = valor_base_taxa * t_percentual
     preco_venda_final = valor_base_taxa + v_taxa_financeira
 
-    # --- TABELA E QUADRADO DE RESULTADOS ---
+    # --- TABELA E RESULTADOS ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
@@ -208,18 +206,14 @@ def main():
         if st.button("💾 Salvar Receita"):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                # Verifica se a tabela já possui dados para concatenar corretamente
                 if not df_rec.empty and 'nome_receita' in df_rec.columns:
                     df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
                 else:
                     df_final = df_nova
                 
-                # Executa a atualização na planilha
-                conn.update(data=df_final)
+                conn.update(worksheet="Receitas", data=df_final)
                 st.success(f"Receita '{nome_produto_final}' salva na nuvem!")
                 st.rerun()
-            else:
-                st.warning("Dê um nome ao produto antes de salvar.")
 
     with res2:
         st.markdown(f"""
