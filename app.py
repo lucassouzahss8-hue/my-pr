@@ -101,7 +101,8 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
-        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
+        # MARGEM FIXA EM 135%
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135)
     with col_p3:
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
     with col_p4:
@@ -150,7 +151,8 @@ def main():
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
-        perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
+        # QUEBRA FIXA EM 2%
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
@@ -159,9 +161,7 @@ def main():
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
-    # CMV Valor: Custos diretos do produto
     v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem
-    
     custo_total_prod = v_cmv + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_venda_produto = custo_total_prod + lucro_valor
@@ -170,16 +170,11 @@ def main():
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # CMV Percentual ajustado para a base de venda do produto
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     
-    # --- NOVA LÓGICA DE CORES (ATÉ 35% VERDE) ---
-    if cmv_percentual <= 35: 
-        cor_cmv = "#4ade80"  # Verde
-    elif cmv_percentual <= 45: 
-        cor_cmv = "#facc15" # Amarelo
-    else: 
-        cor_cmv = "#f87171" # Vermelho
+    if cmv_percentual <= 35: cor_cmv = "#4ade80"
+    elif cmv_percentual <= 45: cor_cmv = "#facc15"
+    else: cor_cmv = "#f87171"
 
     # --- TABELA DETALHADA ---
     st.divider()
