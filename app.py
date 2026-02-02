@@ -167,17 +167,33 @@ def main():
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # Cálculo do CMV
+    # Cálculo do CMV e Definição de Cor
     cmv_percentual = (custo_total_prod / preco_venda_final * 100) if preco_venda_final > 0 else 0
+    
+    if cmv_percentual <= 30:
+        cor_cmv = "#4ade80"  # Verde
+    elif cmv_percentual <= 40:
+        cor_cmv = "#facc15"  # Amarelo
+    else:
+        cor_cmv = "#f87171"  # Vermelho
 
-    # --- TABELA DETALHADA COM CMV ---
+    # --- TABELA DETALHADA ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
+        
+        # Formatando a exibição do CMV para a tabela
+        cmv_formatado = f"{cmv_percentual:.1f}%"
+        
         df_resumo = pd.DataFrame({
-            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Total Produção", "CMV (%)", "Lucro", f"Entrega ({distancia_km}km)", f"Taxa {forma_pagamento}", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV", "Lucro", "Entrega", "Taxas", "TOTAL"],
+            "Valor": [
+                f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", 
+                f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", cmv_formatado, 
+                f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", 
+                f"R$ {preco_venda_final:.2f}"
+            ]
         })
         st.table(df_resumo)
         
@@ -197,7 +213,7 @@ def main():
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-            <p><b>CMV:</b> {cmv_percentual:.1f}%</p>
+            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
             <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
