@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+from datetime import date
 
 # 1. Configuração da Página
 st.set_page_config(
@@ -101,7 +102,6 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
-        # MARGEM FIXA EM 135%
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135)
     with col_p3:
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
@@ -151,7 +151,6 @@ def main():
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
-        # QUEBRA FIXA EM 2%
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
@@ -207,6 +206,53 @@ def main():
             <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
+
+    # --- NOVO: SEÇÃO DE ORÇAMENTO ---
+    st.divider()
+    with st.expander("📝 Criar Novo Orçamento"):
+        st.subheader("Informações do Cliente")
+        c_orc1, c_orc2, c_orc3 = st.columns(3)
+        with c_orc1:
+            nome_cliente = st.text_input("Nome do Cliente")
+        with c_orc2:
+            tel_cliente = st.text_input("Telefone")
+        with c_orc3:
+            data_orc = st.date_input("Data do Orçamento", value=date.today())
+        
+        st.divider()
+        st.subheader("Itens do Orçamento")
+        
+        # Seleção de receita salva
+        rec_lista = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
+        item_selecionado = st.selectbox("Escolha uma Receita Salva para o Orçamento", [""] + rec_lista)
+        
+        # Como o cálculo do valor unitário de uma receita salva exige processar os ingredientes,
+        # aqui o sistema usa o valor que está sendo calculado no momento na tela principal 
+        # ou você pode digitar o valor unitário.
+        
+        col_emb1, col_emb2 = st.columns(2)
+        with col_emb1:
+            valor_base_item = st.number_input("Valor do Produto (R$)", value=preco_venda_final, help="Valor calculado na tela principal")
+        with col_emb2:
+            emb_externa = st.number_input("Valor Embalagem Externa / Sacola (R$)", value=0.0)
+        
+        total_orc = valor_base_item + emb_externa
+        
+        if st.button("Gerar Resumo para Copiar"):
+            resumo_texto = f"""
+            📋 *ORÇAMENTO*
+            📅 Data: {data_orc.strftime('%d/%m/%Y')}
+            👤 Cliente: {nome_cliente}
+            📞 Tel: {tel_cliente}
+            --------------------------
+            🍰 Produto: {item_selecionado if item_selecionado else nome_produto_final}
+            💰 Valor: R$ {valor_base_item:.2f}
+            🛍️ Emb. Externa: R$ {emb_externa:.2f}
+            --------------------------
+            ✅ *TOTAL: R$ {total_orc:.2f}*
+            """
+            st.code(resumo_texto, language="text")
+            st.success("Orçamento gerado! Copie o texto acima.")
 
 if __name__ == "__main__":
     main()
