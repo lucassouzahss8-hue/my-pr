@@ -3,7 +3,7 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import date
 
-# 1. Configuração da Página
+# 1. Configuração da Página (LAYOUT ORIGINAL)
 st.set_page_config(
     page_title="Precificador", 
     page_icon="📊", 
@@ -71,7 +71,7 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR: TAXAS ---
+    # --- SIDEBAR ORIGINAL ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
@@ -79,7 +79,7 @@ def main():
         km_gratis = st.number_input("KM Isentos", value=5)
         valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
 
-    # --- GERENCIAR RECEITAS ---
+    # --- GERENCIAR RECEITAS (REESTABELECIDO) ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
@@ -97,12 +97,12 @@ def main():
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
 
-    # --- CONFIGURAÇÕES DO PRODUTO (LAYOUT ORIGINAL REESTABELECIDO) ---
+    # --- CONFIGURAÇÕES DO PRODUTO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
-        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135) # Valor padrão 135
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135)
     with col_p3:
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
     with col_p4:
@@ -151,8 +151,8 @@ def main():
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
-        perc_quebra = st.slider("Quebra (%)", 0, 15, 2) # Padrão 2%
-        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30) # Padrão 30%
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
+        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
     # --- CÁLCULOS TÉCNICOS ---
@@ -166,10 +166,9 @@ def main():
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
-
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
-    
-    # --- RESULTADOS ---
+
+    # --- TABELA DE DETALHAMENTO ORIGINAL ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
@@ -197,7 +196,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ABA DE ORÇAMENTO (SÓ ADICIONANDO O BOTÃO DE FRETE E AUTO-PREENCHIMENTO) ---
+    # --- ORÇAMENTO (SÓ ADICIONA AS FUNÇÕES PEDIDAS) ---
     st.divider()
     with st.expander("📝 Criar Novo Orçamento"):
         st.subheader("Dados do Cliente")
@@ -210,28 +209,28 @@ def main():
             data_orc = st.date_input("Data do Orçamento", value=date.today())
         
         st.divider()
-        st.subheader("Itens e Valores")
+        st.subheader("Itens Selecionados")
         
         col_it1, col_it2, col_it3 = st.columns([2, 1, 1])
         with col_it1:
-            # Puxa automaticamente o nome do produto que está sendo calculado
+            # Puxa o nome do produto ativo ou receita selecionada
             item_nome_orc = st.text_input("Produto", value=nome_produto_final)
         with col_it2:
-            # Puxa automaticamente o valor já com lucro, quebra e taxas calculados na tabela acima
+            # AUTO-PREENCHIMENTO: Puxa o valor final calculado com lucro/taxas
             v_unit_orc = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
         with col_it3:
             qtd_orc = st.number_input("Quantidade", min_value=1, value=1)
         
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            # Botão/Campo de Frete no Orçamento
+            # ADICIONADO: Campo de Frete puxando do cálculo original
             frete_orc = st.number_input("Frete / Entrega (R$)", value=taxa_entrega)
         with col_f2:
-            emb_extra_orc = st.number_input("Embalagem Adicional (R$)", value=0.0)
+            emb_extra_orc = st.number_input("Emb. Externa / Sacola (R$)", value=0.0)
         
         total_orc = (v_unit_orc * qtd_orc) + frete_orc + emb_extra_orc
         
-        st.markdown(f"### **Total: R$ {total_orc:.2f}**")
+        st.markdown(f"### **TOTAL: R$ {total_orc:.2f}**")
         
         if st.button("Gerar Resumo WhatsApp"):
             resumo = f"""
@@ -244,12 +243,12 @@ def main():
 🔢 Quantidade: {qtd_orc}
 💰 Valor Unit.: R$ {v_unit_orc:.2f}
 🚚 Frete: R$ {frete_orc:.2f}
-🛍️ Emb. Adicional: R$ {emb_extra_orc:.2f}
+🛍️ Emb. Externa: R$ {emb_extra_orc:.2f}
 --------------------------
 ✅ *TOTAL: R$ {total_orc:.2f}*
 """
             st.code(resumo, language="text")
-            st.success("Orçamento gerado com os valores da tabela!")
+            st.success("Orçamento gerado com os valores automáticos!")
 
 if __name__ == "__main__":
     main()
