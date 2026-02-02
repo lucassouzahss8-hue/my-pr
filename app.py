@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilização CSS
+# 2. Estilização CSS Original
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -30,6 +30,7 @@ st.markdown("""
         box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
         color: white; 
     }
+    .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -49,11 +50,8 @@ def carregar_ingredientes():
         if df is None or df.empty:
             return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
         df.columns = [str(c).strip().lower() for c in df.columns]
-        if 'preco' in df.columns:
-            df['preco'] = pd.to_numeric(df['preco'], errors='coerce').fillna(0)
         return df
-    except Exception as e:
-        st.error(f"Erro ao carregar aba 'Ingredientes': {e}")
+    except Exception:
         return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
 def carregar_receitas_nuvem():
@@ -72,26 +70,27 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR: TAXAS (DÉBITO REMOVIDO) ---
+    # --- SIDEBAR: AJUSTE DE TAXAS (APENAS CRÉDITO E KM) ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
+        st.divider()
         km_gratis = st.number_input("KM Isentos", value=5)
-        valor_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
+        valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
 
     # --- GERENCIAR RECEITAS ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
         with col_rec1:
-            selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
+            receita_selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
         with col_rec2:
-            st.write("")
-            if st.button("🔄 Carregar", use_container_width=True) and selecionada != "":
-                dados = df_rec[df_rec['nome_receita'] == selecionada]
-                st.session_state.nome_prod = selecionada
-                st.session_state.n_itens = len(dados)
-                for idx, row in enumerate(dados.itertuples()):
+            st.write("") 
+            if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
+                dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
+                st.session_state.nome_prod = receita_selecionada
+                st.session_state.n_itens = len(dados_rec)
+                for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
                     st.session_state[f"u_{idx}"] = row.unid
@@ -100,96 +99,106 @@ def main():
     # --- CONFIGURAÇÕES DO PRODUTO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
-        nome_final = st.text_input("Nome do Produto:", key="nome_prod")
+        nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
-        margem = st.number_input("Lucro (%)", min_value=0, value=150)
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=150)
     with col_p3:
-        distancia = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
+        distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
     with col_p4:
-        # Crédito como primeira opção para cálculo automático inicial
-        pagamento = st.selectbox("Pagamento", ["Crédito", "PIX"])
+        forma_pagamento = st.selectbox("Pagamento", ["Crédito", "PIX"])
+        
+    st.divider()
 
     if df_ing.empty:
-        st.warning("⚠️ Adicione ingredientes na aba 'Ingredientes' da sua planilha.")
+        st.warning("⚠️ Adicione ingredientes na aba 'Ingredientes' da sua planilha Google.")
         return
 
-    # --- ÁREA DE CÁLCULO ---
-    st.divider()
+    # --- ÁREA DOS INGREDIENTES ---
     col_esq, col_dir = st.columns([2, 1])
-    
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        n_itens = st.number_input("Qtd de Itens:", min_value=1, key="n_itens")
-        custo_total_ing = 0.0
-        lista_save = []
+        n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens")
+        custo_ingredientes_total = 0.0
+        lista_para_salvar = []
 
-        for i in range(int(n_itens)):
+        for i in range(int(n_itens_input)):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
             with c1:
                 lista_nomes = df_ing['nome'].tolist()
-                idx_default = 0
+                idx_def = 0
                 if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes:
-                    idx_default = lista_nomes.index(st.session_state[f"nome_{i}"])
-                item_escolhido = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_default)
+                    idx_def = lista_nomes.index(st.session_state[f"nome_{i}"])
+                escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_def)
             
-            dados_item = df_ing[df_ing['nome'] == item_escolhido].iloc[0]
+            dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
             with c2:
-                qtd = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
+                qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
             with c3:
-                unid = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+                unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
 
             fator = 1.0
             u_base = str(dados_item['unidade']).lower().strip()
-            if unid == "g" and u_base == "kg": fator = 1/1000
-            elif unid == "kg" and u_base == "g": fator = 1000
-            elif unid == "ml" and u_base == "l": fator = 1/1000
+            if unid_uso == "g" and u_base == "kg": fator = 1/1000
+            elif unid_uso == "kg" and u_base == "g": fator = 1000
+            elif unid_uso == "ml" and u_base == "l": fator = 1/1000
             
-            custo_item = (qtd * fator) * float(dados_item['preco'])
-            custo_total_ing += custo_item
-            lista_save.append({"nome_receita": nome_final, "ingrediente": item_escolhido, "qtd": qtd, "unid": unid})
-            
+            custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
+            custo_ingredientes_total += custo_parcial
+            lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
             with c4:
-                st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_item:.2f}</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
-    # --- RESULTADOS ---
     with col_dir:
-        st.subheader("📊 Resumo")
-        v_emb = st.number_input("Embalagem (R$)", value=0.0, step=0.1)
-        v_quebra = custo_total_ing * 0.05
-        custo_producao = custo_total_ing + v_quebra + v_emb
-        lucro_valor = custo_producao * (margem / 100)
-        
-        v_entrega = (distancia - km_gratis) * valor_km if distancia > km_gratis else 0.0
-        
-        # Lógica de Taxa (Apenas Crédito ou Zero para PIX)
-        taxa_perc = taxa_credito_input if pagamento == "Crédito" else 0.0
-        
-        total_sem_taxa = custo_producao + lucro_valor + v_entrega
-        v_financeiro = total_sem_taxa * (taxa_perc / 100)
-        total_final = total_sem_taxa + v_financeiro
+        st.subheader("⚙️ Adicionais")
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
+        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
+        valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
+    # --- CÁLCULOS FINAIS ---
+    taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+    v_quebra = custo_ingredientes_total * (perc_quebra / 100)
+    v_despesas = custo_ingredientes_total * (perc_despesas / 100)
+    
+    custo_total_prod = custo_ingredientes_total + v_quebra + valor_embalagem + v_despesas
+    lucro_valor = custo_total_prod * (margem_lucro / 100)
+    preco_venda_produto = custo_total_prod + lucro_valor
+    
+    # Taxa Financeira (Apenas Crédito ou Zero para PIX)
+    t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+    v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
+    preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
+
+    # --- RESTAURAÇÃO DA TABELA BRANCA DETALHADA ---
+    st.divider()
+    res1, res2 = st.columns([1.5, 1])
+    with res1:
+        st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
+        df_resumo = pd.DataFrame({
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Total Produção", "Lucro", f"Entrega ({distancia_km}km)", f"Taxa {forma_pagamento}", "TOTAL FINAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+        })
+        st.table(df_resumo) # Esta é a tabela branca detalhada que você solicitou
+        
+        if st.button("💾 Salvar Receita", use_container_width=True):
+            if nome_produto_final:
+                df_nova = pd.DataFrame(lista_para_salvar)
+                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
+                conn.update(worksheet="Receitas", data=df_final)
+                st.success(f"Receita '{nome_produto_final}' salva!")
+                st.rerun()
+
+    with res2:
+        # Caixa de resumo visual à direita
         st.markdown(f"""
         <div class='resultado-box'>
-            <h2 style='color:white; margin-bottom:0;'>Total a Cobrar</h2>
-            <h1 style='color:#60a5fa; font-size:45px; margin-top:0;'>R$ {total_final:.2f}</h1>
-            <hr style='opacity:0.3'>
-            <p style='margin:0;'><b>Custo Prod:</b> R$ {custo_producao:.2f}</p>
-            <p style='margin:0;'><b>Taxa {pagamento}:</b> R$ {v_financeiro:.2f}</p>
-            <p style='margin:0;'><b>Entrega:</b> R$ {v_entrega:.2f}</p>
-            <p style='font-size:18px; margin-top:10px;'><b>Lucro Líquido: <span style='color:#4ade80;'>R$ {lucro_valor:.2f}</span></b></p>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
+            <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
+            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
+            <hr style='border-color: #4b5563;'>
+            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
+            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
-
-        st.write("")
-        if st.button("💾 Salvar Receita", use_container_width=True):
-            if nome_final:
-                df_nova = pd.DataFrame(lista_save)
-                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_final], df_nova], ignore_index=True)
-                conn.update(worksheet="Receitas", data=df_final)
-                st.success(f"Receita '{nome_final}' salva!")
-                st.rerun()
-            else:
-                st.warning("Dê um nome ao produto primeiro.")
 
 if __name__ == "__main__":
     main()
