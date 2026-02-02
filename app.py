@@ -170,13 +170,16 @@ def main():
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # CMV Percentual: Apenas custo do produto / preço de venda (conceito sistema antigo)
+    # CMV Percentual ajustado para a base de venda do produto
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     
-    # Lógica de cores semáforo para o CMV
-    if cmv_percentual <= 30: cor_cmv = "#4ade80"  # Verde
-    elif cmv_percentual <= 40: cor_cmv = "#facc15" # Amarelo
-    else: cor_cmv = "#f87171" # Vermelho
+    # --- NOVA LÓGICA DE CORES (ATÉ 35% VERDE) ---
+    if cmv_percentual <= 35: 
+        cor_cmv = "#4ade80"  # Verde
+    elif cmv_percentual <= 45: 
+        cor_cmv = "#facc15" # Amarelo
+    else: 
+        cor_cmv = "#f87171" # Vermelho
 
     # --- TABELA DETALHADA ---
     st.divider()
@@ -184,7 +187,7 @@ def main():
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
-            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", f"Entrega ({distancia_km}km)", f"Taxa {forma_pagamento}", "TOTAL FINAL"],
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
             "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
