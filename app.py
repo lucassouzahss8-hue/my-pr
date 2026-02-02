@@ -71,7 +71,7 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR: AJUSTE DE TAXAS ---
+    # --- SIDEBAR: TAXAS ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
@@ -97,13 +97,12 @@ def main():
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
 
-    # --- CONFIGURAÇÕES DO PRODUTO (VALORES FIXOS) ---
+    # --- CONFIGURAÇÕES DO PRODUTO (LAYOUT ORIGINAL REESTABELECIDO) ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
-        margem_lucro = 135.0  # FIXO CONFORME PEDIDO
-        st.info(f"Margem: {margem_lucro}%")
+        margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135) # Valor padrão 135
     with col_p3:
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
     with col_p4:
@@ -151,11 +150,9 @@ def main():
                 st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
     with col_dir:
-        st.subheader("⚙️ Adicionais Fixos")
-        perc_quebra = 2.0  # FIXO CONFORME PEDIDO
-        perc_despesas = 30.0 # FIXO CONFORME PEDIDO
-        st.write(f"Quebra: {perc_quebra}%")
-        st.write(f"Despesas Gerais: {perc_despesas}%")
+        st.subheader("⚙️ Adicionais")
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 2) # Padrão 2%
+        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30) # Padrão 30%
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
     # --- CÁLCULOS TÉCNICOS ---
@@ -170,27 +167,37 @@ def main():
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # --- RESULTADO VISUAL ---
+    cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
+    
+    # --- RESULTADOS ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final}")
         df_resumo = pd.DataFrame({
-            "Item": ["Custo Ingredientes", "Quebra (2%)", "Despesas (30%)", "Embalagem", "Lucro (135%)", "Entrega", "Total Final"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
+        
+        if st.button("💾 Salvar Receita", use_container_width=True):
+            if nome_produto_final:
+                df_nova = pd.DataFrame(lista_para_salvar)
+                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
+                conn.update(worksheet="Receitas", data=df_final)
+                st.success(f"Receita '{nome_produto_final}' salva!")
+                st.rerun()
 
     with res2:
         st.markdown(f"""
         <div class='resultado-box'>
-            <p style='margin:0; font-size:14px; opacity: 0.8;'>PREÇO CALCULADO</p>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
-            <p>Lucro: R$ {lucro_valor:.2f} (135%)</p>
+            <p>Lucro Líquido: R$ {lucro_valor:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ABA DE ORÇAMENTO (COM TODOS OS CÁLCULOS ATUALIZADOS) ---
+    # --- ABA DE ORÇAMENTO (SÓ ADICIONANDO O BOTÃO DE FRETE E AUTO-PREENCHIMENTO) ---
     st.divider()
     with st.expander("📝 Criar Novo Orçamento"):
         st.subheader("Dados do Cliente")
@@ -203,30 +210,31 @@ def main():
             data_orc = st.date_input("Data do Orçamento", value=date.today())
         
         st.divider()
-        st.subheader("Itens e Entrega")
+        st.subheader("Itens e Valores")
         
         col_it1, col_it2, col_it3 = st.columns([2, 1, 1])
         with col_it1:
+            # Puxa automaticamente o nome do produto que está sendo calculado
             item_nome_orc = st.text_input("Produto", value=nome_produto_final)
         with col_it2:
-            # Puxa o valor calculado com margem de 135% e quebra 2%
+            # Puxa automaticamente o valor já com lucro, quebra e taxas calculados na tabela acima
             v_unit_orc = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
         with col_it3:
             qtd_orc = st.number_input("Quantidade", min_value=1, value=1)
         
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            frete_orc = st.number_input("Valor do Frete (R$)", value=taxa_entrega)
+            # Botão/Campo de Frete no Orçamento
+            frete_orc = st.number_input("Frete / Entrega (R$)", value=taxa_entrega)
         with col_f2:
-            emb_extra_orc = st.number_input("Sacola/Embalagem Externa (R$)", value=0.0)
+            emb_extra_orc = st.number_input("Embalagem Adicional (R$)", value=0.0)
         
-        # Cálculo Final
-        total_final_orc = (v_unit_orc * qtd_orc) + frete_orc + emb_extra_orc
+        total_orc = (v_unit_orc * qtd_orc) + frete_orc + emb_extra_orc
         
-        st.markdown(f"### **TOTAL DO ORÇAMENTO: R$ {total_final_orc:.2f}**")
+        st.markdown(f"### **Total: R$ {total_orc:.2f}**")
         
-        if st.button("Gerar Resumo para WhatsApp"):
-            resumo_texto = f"""
+        if st.button("Gerar Resumo WhatsApp"):
+            resumo = f"""
 📋 *ORÇAMENTO*
 📅 Data: {data_orc.strftime('%d/%m/%Y')}
 👤 Cliente: {nome_cliente}
@@ -235,13 +243,13 @@ def main():
 🍰 Produto: {item_nome_orc}
 🔢 Quantidade: {qtd_orc}
 💰 Valor Unit.: R$ {v_unit_orc:.2f}
-🛍️ Emb. Externa: R$ {emb_extra_orc:.2f}
 🚚 Frete: R$ {frete_orc:.2f}
+🛍️ Emb. Adicional: R$ {emb_extra_orc:.2f}
 --------------------------
-✅ *TOTAL: R$ {total_final_orc:.2f}*
+✅ *TOTAL: R$ {total_orc:.2f}*
 """
-            st.code(resumo_texto, language="text")
-            st.success("Cálculos de 135% de lucro e 2% de quebra aplicados com sucesso!")
+            st.code(resumo, language="text")
+            st.success("Orçamento gerado com os valores da tabela!")
 
 if __name__ == "__main__":
     main()
