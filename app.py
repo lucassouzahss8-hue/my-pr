@@ -151,18 +151,18 @@ def main():
     with col_dir:
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 5)
-        perc_despesas = st.slider("Fixo/Geral (%)", 0, 100, 30)
+        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
-    # --- CÁLCULOS DO SISTEMA ANTIGO ---
+    # --- CÁLCULOS FINAIS ---
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
-    # CMV Antigo: Apenas Custos Diretos (Ingredientes + Quebra + Embalagem)
-    cmv_valor = custo_ingredientes_total + v_quebra + valor_embalagem
+    # CMV Valor: Custos diretos do produto
+    v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem
     
-    custo_total_prod = cmv_valor + v_despesas
+    custo_total_prod = v_cmv + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_venda_produto = custo_total_prod + lucro_valor
     
@@ -170,11 +170,13 @@ def main():
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # CMV Percentual sobre o Preço de Venda do Produto (Sem taxas extras)
-    cmv_percentual = (cmv_valor / preco_venda_produto) * 100 if preco_venda_produto > 0 else 0
+    # CMV Percentual: Apenas custo do produto / preço de venda (conceito sistema antigo)
+    cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     
-    # Cores do Sistema Antigo
-    cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
+    # Lógica de cores semáforo para o CMV
+    if cmv_percentual <= 30: cor_cmv = "#4ade80"  # Verde
+    elif cmv_percentual <= 40: cor_cmv = "#facc15" # Amarelo
+    else: cor_cmv = "#f87171" # Vermelho
 
     # --- TABELA DETALHADA ---
     st.divider()
@@ -182,8 +184,8 @@ def main():
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
-            "Item": ["CMV (Ingredientes + Emb.)", "Custos Fixos/Gerais", "Lucro Desejado", "Taxa Entrega", "Taxas Cartão", "TOTAL FINAL"],
-            "Valor": [f"R$ {cmv_valor:.2f}", f"R$ {v_despesas:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", f"Entrega ({distancia_km}km)", f"Taxa {forma_pagamento}", "TOTAL FINAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -198,12 +200,13 @@ def main():
     with res2:
         st.markdown(f"""
         <div class='resultado-box'>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
             <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
-            <p><b>CMV do Produto:</b> <span style='color:{cor_cmv}; font-weight:bold;'>{cmv_percentual:.1f}%</span> (R$ {cmv_valor:.2f})</p>
             <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-            <p><small>*O CMV ideal é abaixo de 35%</small></p>
+            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
+            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
 
