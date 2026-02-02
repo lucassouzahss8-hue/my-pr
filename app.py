@@ -207,10 +207,10 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # --- NOVO: SEÇÃO DE ORÇAMENTO ---
+    # --- ABA DE ORÇAMENTO ---
     st.divider()
     with st.expander("📝 Criar Novo Orçamento"):
-        st.subheader("Informações do Cliente")
+        st.subheader("Dados do Cliente")
         c_orc1, c_orc2, c_orc3 = st.columns(3)
         with c_orc1:
             nome_cliente = st.text_input("Nome do Cliente")
@@ -220,37 +220,38 @@ def main():
             data_orc = st.date_input("Data do Orçamento", value=date.today())
         
         st.divider()
-        st.subheader("Itens do Orçamento")
-        
-        # Seleção de receita salva
+        st.subheader("Itens Selecionados")
         rec_lista = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
-        item_selecionado = st.selectbox("Escolha uma Receita Salva para o Orçamento", [""] + rec_lista)
         
-        # Como o cálculo do valor unitário de uma receita salva exige processar os ingredientes,
-        # aqui o sistema usa o valor que está sendo calculado no momento na tela principal 
-        # ou você pode digitar o valor unitário.
+        col_it1, col_it2, col_it3 = st.columns([2, 1, 1])
+        with col_it1:
+            item_selecionado = st.selectbox("Escolha a Receita Salva", [""] + rec_lista)
+        with col_it2:
+            valor_unitario = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
+        with col_it3:
+            quantidade = st.number_input("Quantidade", min_value=1, value=1)
         
-        col_emb1, col_emb2 = st.columns(2)
-        with col_emb1:
-            valor_base_item = st.number_input("Valor do Produto (R$)", value=preco_venda_final, help="Valor calculado na tela principal")
-        with col_emb2:
-            emb_externa = st.number_input("Valor Embalagem Externa / Sacola (R$)", value=0.0)
+        emb_externa = st.number_input("Valor Embalagem Externa / Sacola (R$)", value=0.0)
         
-        total_orc = valor_base_item + emb_externa
+        total_itens = valor_unitario * quantidade
+        total_final_orc = total_itens + emb_externa
         
-        if st.button("Gerar Resumo para Copiar"):
+        st.markdown(f"### **Total do Orçamento: R$ {total_final_orc:.2f}**")
+        
+        if st.button("Gerar Resumo para WhatsApp"):
             resumo_texto = f"""
-            📋 *ORÇAMENTO*
-            📅 Data: {data_orc.strftime('%d/%m/%Y')}
-            👤 Cliente: {nome_cliente}
-            📞 Tel: {tel_cliente}
-            --------------------------
-            🍰 Produto: {item_selecionado if item_selecionado else nome_produto_final}
-            💰 Valor: R$ {valor_base_item:.2f}
-            🛍️ Emb. Externa: R$ {emb_externa:.2f}
-            --------------------------
-            ✅ *TOTAL: R$ {total_orc:.2f}*
-            """
+📋 *ORÇAMENTO*
+📅 Data: {data_orc.strftime('%d/%m/%Y')}
+👤 Cliente: {nome_cliente}
+📞 Tel: {tel_cliente}
+--------------------------
+🍰 Produto: {item_selecionado if item_selecionado else nome_produto_final}
+🔢 Quantidade: {quantidade}
+💰 Valor Unit.: R$ {valor_unitario:.2f}
+🛍️ Emb. Externa: R$ {emb_externa:.2f}
+--------------------------
+✅ *TOTAL: R$ {total_final_orc:.2f}*
+"""
             st.code(resumo_texto, language="text")
             st.success("Orçamento gerado! Copie o texto acima.")
 
