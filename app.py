@@ -3,7 +3,7 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import date
 
-# 1. Configuração da Página (LAYOUT ORIGINAL)
+# 1. Configuração da Página
 st.set_page_config(
     page_title="Precificador", 
     page_icon="📊", 
@@ -79,7 +79,7 @@ def main():
         km_gratis = st.number_input("KM Isentos", value=5)
         valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
 
-    # --- GERENCIAR RECEITAS (REESTABELECIDO) ---
+    # --- ABA DE SELEÇÃO DE RECEITAS (REESTABELECIDA) ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
@@ -168,7 +168,7 @@ def main():
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
 
-    # --- TABELA DE DETALHAMENTO ORIGINAL ---
+    # --- TABELA DE DETALHAMENTO ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
@@ -196,7 +196,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ORÇAMENTO (SÓ ADICIONA AS FUNÇÕES PEDIDAS) ---
+    # --- ORÇAMENTO (COM SELEÇÃO E VALORES AUTOMÁTICOS) ---
     st.divider()
     with st.expander("📝 Criar Novo Orçamento"):
         st.subheader("Dados do Cliente")
@@ -213,20 +213,20 @@ def main():
         
         col_it1, col_it2, col_it3 = st.columns([2, 1, 1])
         with col_it1:
-            # Puxa o nome do produto ativo ou receita selecionada
-            item_nome_orc = st.text_input("Produto", value=nome_produto_final)
+            # Puxa a lista de receitas salvas para seleção
+            lista_orc = [""] + receitas_nomes
+            item_selecionado_orc = st.selectbox("Escolha a Receita Salva", options=lista_orc)
         with col_it2:
-            # AUTO-PREENCHIMENTO: Puxa o valor final calculado com lucro/taxas
+            # Adiciona o valor automático da receita ou do cálculo atual
             v_unit_orc = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
         with col_it3:
             qtd_orc = st.number_input("Quantidade", min_value=1, value=1)
         
         col_f1, col_f2 = st.columns(2)
         with col_f1:
-            # ADICIONADO: Campo de Frete puxando do cálculo original
             frete_orc = st.number_input("Frete / Entrega (R$)", value=taxa_entrega)
         with col_f2:
-            emb_extra_orc = st.number_input("Emb. Externa / Sacola (R$)", value=0.0)
+            emb_extra_orc = st.number_input("Emb. Externa (R$)", value=0.0)
         
         total_orc = (v_unit_orc * qtd_orc) + frete_orc + emb_extra_orc
         
@@ -239,7 +239,7 @@ def main():
 👤 Cliente: {nome_cliente}
 📞 Tel: {tel_cliente}
 --------------------------
-🍰 Produto: {item_nome_orc}
+🍰 Produto: {item_selecionado_orc if item_selecionado_orc else nome_produto_final}
 🔢 Quantidade: {qtd_orc}
 💰 Valor Unit.: R$ {v_unit_orc:.2f}
 🚚 Frete: R$ {frete_orc:.2f}
