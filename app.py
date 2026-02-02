@@ -227,6 +227,7 @@ def main():
         with col_it1:
             item_selecionado = st.selectbox("Escolha a Receita Salva", [""] + rec_lista)
         with col_it2:
+            # O valor unitário agora recebe automaticamente o preco_venda_final calculado acima
             valor_unitario = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
         with col_it3:
             quantidade = st.number_input("Quantidade", min_value=1, value=1)
@@ -245,7 +246,7 @@ def main():
 👤 Cliente: {nome_cliente}
 📞 Tel: {tel_cliente}
 --------------------------
-🍰 Produto: {item_selecionado if item_selecionado else nome_produto_final}
+🍰 Produto: {item_selecionado if item_selecionado else (nome_produto_final if nome_produto_final else "Produto s/ Nome")}
 🔢 Quantidade: {quantidade}
 💰 Valor Unit.: R$ {valor_unitario:.2f}
 🛍️ Emb. Externa: R$ {emb_externa:.2f}
