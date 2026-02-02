@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilização CSS Original
+# 2. Estilização CSS
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -70,7 +70,7 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR: AJUSTE DE TAXAS (APENAS CRÉDITO E KM) ---
+    # --- SIDEBAR: AJUSTE DE TAXAS ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
@@ -110,7 +110,7 @@ def main():
     st.divider()
 
     if df_ing.empty:
-        st.warning("⚠️ Adicione ingredientes na aba 'Ingredientes' da sua planilha Google.")
+        st.warning("⚠️ Adicione ingredientes na aba 'Ingredientes' da sua planilha.")
         return
 
     # --- ÁREA DOS INGREDIENTES ---
@@ -163,21 +163,23 @@ def main():
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_venda_produto = custo_total_prod + lucro_valor
     
-    # Taxa Financeira (Apenas Crédito ou Zero para PIX)
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
     v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # --- RESTAURAÇÃO DA TABELA BRANCA DETALHADA ---
+    # Cálculo do CMV
+    cmv_percentual = (custo_total_prod / preco_venda_final * 100) if preco_venda_final > 0 else 0
+
+    # --- TABELA DETALHADA COM CMV ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
-            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Total Produção", "Lucro", f"Entrega ({distancia_km}km)", f"Taxa {forma_pagamento}", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Total Produção", "CMV (%)", "Lucro", f"Entrega ({distancia_km}km)", f"Taxa {forma_pagamento}", "TOTAL FINAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
-        st.table(df_resumo) # Esta é a tabela branca detalhada que você solicitou
+        st.table(df_resumo)
         
         if st.button("💾 Salvar Receita", use_container_width=True):
             if nome_produto_final:
@@ -188,7 +190,6 @@ def main():
                 st.rerun()
 
     with res2:
-        # Caixa de resumo visual à direita
         st.markdown(f"""
         <div class='resultado-box'>
             <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
@@ -196,6 +197,7 @@ def main():
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
             <hr style='border-color: #4b5563;'>
             <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
+            <p><b>CMV:</b> {cmv_percentual:.1f}%</p>
             <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
