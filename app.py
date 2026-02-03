@@ -62,7 +62,6 @@ def carregar_receitas_nuvem():
         df = conn.read(worksheet="Receitas", ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
-        # Padroniza nomes de colunas
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
     except Exception:
@@ -85,7 +84,7 @@ def main():
 
     # --- GERENCIAR RECEITAS ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
-        receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
+        receitas_nomes = sorted(df_rec['nome_receita'].unique().tolist()) if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
         with col_rec1:
             receita_selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
@@ -126,11 +125,11 @@ def main():
             with c1:
                 lista_nomes = df_ing['nome'].tolist()
                 idx_def = 0
-                if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes:
-                    idx_def = lista_nomes.index(st.session_state[f"nome_{i}"])
-                escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_def)
+                nome_key = f"nome_{i}"
+                if nome_key in st.session_state and st.session_state[nome_key] in lista_nomes:
+                    idx_def = lista_nomes.index(st.session_state[nome_key])
+                escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=nome_key, index=idx_def)
             
-            # Cálculo de custo
             dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
             with c2:
                 qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
@@ -200,7 +199,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ABA DE ORÇAMENTO (SISTEMA DE BUSCA NA PLANILHA) ---
+    # --- ABA DE ORÇAMENTO ---
     st.divider()
     st.header("📋 Gerador de Orçamento")
     
@@ -211,70 +210,47 @@ def main():
 
     col_sel, col_qtd, col_frete, col_emb, col_btn = st.columns([2.5, 0.8, 1, 1, 1])
     with col_sel:
-        receita_orc = st.selectbox("Escolha a Receita Salva:", [""] + receitas_nomes, key="sel_orc")
+        # Puxa as receitas da planilha
+        receita_lista = sorted(df_rec['nome_receita'].unique().tolist())
+        item_orc = st.selectbox("Escolha a Receita:", [""] + receita_lista, key="sel_orc")
     with col_qtd:
-        qtd_orc = st.number_input("Quantidade", min_value=1, value=1, key="qtd_orc_val")
+        qtd_orc = st.number_input("Qtd", min_value=1, value=1, key="qtd_orc_val")
     with col_frete:
-        frete_orc = st.number_input("Taxa Entrega (R$)", min_value=0.0, value=0.0)
+        frete_orc = st.number_input("Frete (R$)", min_value=0.0, value=0.0)
     with col_emb:
         emb_extra = st.number_input("Emb. Extra (R$)", min_value=0.0, value=0.0)
     
     with col_btn:
         st.write("")
         if st.button("➕ Adicionar", use_container_width=True):
-            if receita_orc:
-                # 1. Busca ingredientes específicos dessa receita na planilha
-                ing_da_receita = df_rec[df_rec['nome_receita'] == receita_orc]
-                
-                custo_base_orc = 0.0
-                for r in ing_da_receita.itertuples():
-                    # Puxa o preço atual do ingrediente da aba 'Ingredientes'
-                    match_ing = df_ing[df_ing['nome'] == r.ingrediente]
-                    if not match_ing.empty:
-                        pre_ing = float(match_ing.iloc[0]['preco'])
-                        u_b = str(match_ing.iloc[0]['unidade']).lower().strip()
-                        u_r = str(r.unid).lower().strip()
-                        
-                        f = 1.0
-                        if u_r == "g" and u_b == "kg": f = 1/1000
-                        elif u_r == "kg" and u_b == "g": f = 1000
-                        elif u_r == "ml" and u_b == "l": f = 1/1000
-                        
-                        custo_base_orc += (float(r.qtd) * f) * pre_ing
-                
-                # 2. Aplica as taxas configuradas no momento
-                v_q_orc = custo_base_orc * (perc_quebra / 100)
-                v_d_orc = custo_base_orc * (perc_despesas / 100)
-                # Soma embalagem padrão da receita + embalagem extra do orçamento
-                c_prod_orc = custo_base_orc + v_q_orc + v_d_orc + valor_embalagem + emb_extra
-                lucro_orc = c_prod_orc * (margem_lucro / 100)
-                
-                # Preço final unitário com frete e taxas financeiras
-                p_venda_orc = c_prod_orc + lucro_orc + frete_orc
-                taxa_fin_orc = p_venda_orc * t_percentual
-                valor_final_item = p_venda_orc + taxa_fin_orc
-
-                st.session_state.carrinho.append({
-                    "Produto": receita_orc, 
-                    "Qtd": qtd_orc, 
-                    "Preço Unit.": valor_final_item, 
-                    "Subtotal": valor_final_item * qtd_orc
-                })
-                st.rerun()
+            if item_orc:
+                # Se a receita selecionada for a mesma que está na tela, usa o valor da tela
+                # Se for outra, exibe o aviso para carregar primeiro (garante precisão)
+                if item_orc == nome_produto_final:
+                    # O valor unitário herda as taxas da tela + os extras do orçamento
+                    total_unid = preco_venda_final + frete_orc + emb_extra
+                    st.session_state.carrinho.append({
+                        "Produto": item_orc, 
+                        "Qtd": qtd_orc, 
+                        "Preço Unit.": total_unid, 
+                        "Subtotal": total_unid * qtd_orc
+                    })
+                else:
+                    st.warning(f"⚠️ Carregue '{item_orc}' acima primeiro para garantir as taxas corretas.")
 
     if st.session_state.carrinho:
         df_c = pd.DataFrame(st.session_state.carrinho)
         st.table(df_c.style.format({"Preço Unit.": "R$ {:.2f}", "Subtotal": "R$ {:.2f}"}))
-        total_pedido = df_c["Subtotal"].sum()
-        st.markdown(f"## **Total do Pedido: R$ {total_pedido:.2f}**")
+        total_p = df_c["Subtotal"].sum()
+        st.markdown(f"## **Total do Pedido: R$ {total_p:.2f}**")
         
-        c_z1, c_z2 = st.columns(2)
-        with c_z1:
+        c1, c2 = st.columns(2)
+        with c1:
             if st.button("📲 Gerar WhatsApp", use_container_width=True):
-                lista_itens = "".join([f"• {i['Produto']} ({i['Qtd']}x): R$ {i['Subtotal']:.2f}\n" for i in st.session_state.carrinho])
-                texto = f"*ORÇAMENTO - {data_orcamento.strftime('%d/%m/%Y')}*\n👤 *Cliente:* {nome_cliente}\n--------------------------\n{lista_itens}--------------------------\n💰 *TOTAL: R$ {total_pedido:.2f}*"
-                st.code(texto, language="text")
-        with c_z2:
+                lista_zap = "".join([f"• {i['Produto']} ({i['Qtd']}x): R$ {i['Subtotal']:.2f}\n" for i in st.session_state.carrinho])
+                msg = f"*ORÇAMENTO - {data_orcamento.strftime('%d/%m/%Y')}*\n👤 *Cliente:* {nome_cliente}\n--------------------------\n{lista_zap}--------------------------\n💰 *TOTAL: R$ {total_p:.2f}*"
+                st.code(msg, language="text")
+        with c2:
             if st.button("🗑️ Limpar", use_container_width=True):
                 st.session_state.carrinho = []; st.rerun()
 
