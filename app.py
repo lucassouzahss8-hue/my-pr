@@ -156,7 +156,7 @@ def main():
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
     # --- CÁLCULOS FINAIS ---
-    taxa_entrega_base = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+    taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
@@ -166,8 +166,8 @@ def main():
     preco_venda_produto = custo_total_prod + lucro_valor
     
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-    v_taxa_financeira = (preco_venda_produto + taxa_entrega_base) * t_percentual
-    preco_venda_final = preco_venda_produto + taxa_entrega_base + v_taxa_financeira
+    v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
+    preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     
@@ -182,7 +182,7 @@ def main():
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
             "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_base:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -207,54 +207,53 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ABA DE ORÇAMENTO (ADICIONADA AO FINAL) ---
+    # --- SEÇÃO ADICIONADA: ORÇAMENTO ---
     st.divider()
-    with st.expander("📝 Criar Novo Orçamento"):
+    with st.expander("📝 Gerar Orçamento"):
         st.subheader("Dados do Cliente")
-        col_o1, col_o2, col_o3 = st.columns(3)
-        with col_o1:
-            cliente = st.text_input("Nome do Cliente")
-        with col_o2:
-            contato = st.text_input("WhatsApp/Telefone")
-        with col_o3:
+        c_orc1, c_orc2, c_orc3 = st.columns(3)
+        with c_orc1:
+            nome_cliente = st.text_input("Nome do Cliente")
+        with c_orc2:
+            tel_cliente = st.text_input("WhatsApp")
+        with c_orc3:
             data_hoje = st.date_input("Data", value=date.today())
-            
+        
         st.divider()
-        st.subheader("Produtos e Entrega")
-        col_i1, col_i2, col_i3 = st.columns([2, 1, 1])
-        with col_i1:
+        col_item1, col_item2, col_item3 = st.columns([2, 1, 1])
+        with col_item1:
             # Puxa o nome do produto final que já está no input lá em cima
-            nome_orc = st.text_input("Item", value=nome_produto_final)
-        with col_i2:
-            # Puxa o valor final calculado na sua tabela detalhada automaticamente
-            v_unit_orc = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
-        with col_i3:
-            qtd_orc = st.number_input("Qtd", min_value=1, value=1)
+            prod_nome = st.text_input("Produto", value=nome_produto_final)
+        with col_item2:
+            # Puxa o valor final calculado na sua tabela automaticamente
+            v_unit = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
+        with col_item3:
+            qtd = st.number_input("Quantidade", min_value=1, value=1)
             
-        col_e1, col_e2 = st.columns(2)
-        with col_e1:
-            taxa_entrega_final = st.number_input("Taxa de Entrega (R$)", value=taxa_entrega_base)
-        with col_e2:
-            emb_ext = st.number_input("Embalagem Externa/Sacola (R$)", value=0.0)
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            frete_orc = st.number_input("Frete (R$)", value=taxa_entrega)
+        with col_f2:
+            embalagem_ext = st.number_input("Emb. Externa (R$)", value=0.0)
             
-        total_pedido = (v_unit_orc * qtd_orc) + taxa_entrega_final + emb_ext
-        st.markdown(f"## **Total do Pedido: R$ {total_pedido:.2f}**")
+        total_orc = (v_unit * qtd) + frete_orc + embalagem_ext
+        st.markdown(f"### **Total: R$ {total_orc:.2f}**")
         
         if st.button("Gerar orçamento para whatsapp"):
-            mensagem = f"""
+            txt = f"""
 📋 *ORÇAMENTO*
 📅 Data: {data_hoje.strftime('%d/%m/%Y')}
-👤 Cliente: {cliente}
+👤 Cliente: {nome_cliente}
 --------------------------
-🍰 *Produto:* {nome_orc}
-🔢 *Quantidade:* {qtd_orc}
-💰 *Valor Unit.:* R$ {v_unit_orc:.2f}
-🚚 *Entrega:* R$ {taxa_entrega_final:.2f}
-🛍️ *Embalagem:* R$ {emb_ext:.2f}
+🍰 *Produto:* {prod_nome}
+🔢 *Quantidade:* {qtd}
+💰 *Valor Unit.:* R$ {v_unit:.2f}
+🚚 *Entrega:* R$ {frete_orc:.2f}
+🛍️ *Embalagem:* R$ {embalagem_ext:.2f}
 --------------------------
-✅ *TOTAL: R$ {total_pedido:.2f}*
+✅ *TOTAL: R$ {total_orc:.2f}*
 """
-            st.code(mensagem, language="text")
+            st.code(txt, language="text")
 
 if __name__ == "__main__":
     main()
