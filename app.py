@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import date
-from fpdf import FPDF # Certifique-se de ter 'fpdf' no seu requirements.txt
+from fpdf import FPDF
 
 # 1. Configuração da Página
 st.set_page_config(
@@ -88,7 +88,6 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.cell(200, 10, f"Data: {date.today().strftime('%d/%m/%Y')}", ln=True)
     pdf.ln(5)
     
-    # Tabela
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(100, 10, " Produto", border=1, fill=True)
@@ -106,14 +105,12 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- APP PRINCIPAL ---
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR: AJUSTE DE TAXAS ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
@@ -121,7 +118,6 @@ def main():
         km_gratis = st.number_input("KM Isentos", value=5)
         valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
 
-    # --- GERENCIAR RECEITAS (Mantido) ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
@@ -139,7 +135,6 @@ def main():
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
 
-    # --- CONFIGURAÇÕES DO PRODUTO (Mantido) ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod_input")
@@ -156,7 +151,6 @@ def main():
         st.warning("⚠️ Adicione ingredientes na aba 'Ingredientes' da sua planilha.")
         return
 
-    # --- ÁREA DOS INGREDIENTES (Mantido) ---
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
@@ -197,7 +191,6 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
-    # --- CÁLCULOS FINAIS ---
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
@@ -212,7 +205,6 @@ def main():
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
 
-    # --- TABELA DETALHADA E SALVAR RECEITA (Mantido) ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
@@ -234,9 +226,6 @@ def main():
     with res2:
         st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
 
-    # =========================================================
-    # --- SEÇÃO DE ORÇAMENTO (SÓ ADIÇÃO, SEM ALTERAÇÃO) ---
-    # =========================================================
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     
@@ -297,8 +286,6 @@ def main():
             st.info(f"💰 **Lucro Líquido:** R$ {total_lucro_acumulado:.2f}  |  📈 **Margem aplicada:** {margem_lucro}%")
             
             b_col1, b_col2, b_col3 = st.columns(3)
-            
-            # BOTÃO PEDIDO: GERAR PDF ORÇAMENTO
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf Orçamento", data=pdf_bytes, file_name=f"Orcamento_{nome_cliente}.pdf", mime="application/pdf", use_container_width=True)
 
@@ -313,7 +300,25 @@ def main():
 
     with t2:
         df_salvos = carregar_historico_orc()
-        if not df_salvos.empty: st.dataframe(df_salvos, use_container_width=True)
+        if not df_salvos.empty:
+            # LIMPEZA DA COLUNA: Removemos 'Valor Final' (que estava vindo como None) e mantemos 'Valor_Final'
+            if 'Valor Final' in df_salvos.columns:
+                df_salvos = df_salvos.drop(columns=['Valor Final'])
+            
+            # EXIBIÇÃO COM BOTÃO DE DELETAR
+            for i, row in df_salvos.iterrows():
+                col_data, col_cli, col_ped, col_val, col_del = st.columns([1.5, 2, 2.5, 1.5, 0.5])
+                col_data.write(row['Data'])
+                col_cli.write(row['Cliente'])
+                col_ped.write(row['Pedido'])
+                col_val.write(row['Valor_Final'])
+                if col_del.button("🗑️", key=f"del_hist_{i}"):
+                    df_novo_hist = df_salvos.drop(i)
+                    conn.update(worksheet="Orcamentos_Salvos", data=df_novo_hist)
+                    st.success("Removido!")
+                    st.rerun()
+        else:
+            st.info("Nenhum orçamento salvo encontrado.")
 
 if __name__ == "__main__":
     main()
