@@ -73,7 +73,7 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR: AJUSTE DE TAXAS ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
@@ -221,14 +221,10 @@ def main():
 
     receita_para_orc = st.selectbox("Selecione uma Receita para o Orçamento:", [""] + receitas_nomes, key="sel_orc")
 
-    col_orc1, col_orc2, col_orc3 = st.columns([2, 1, 1])
+    col_orc1, col_orc2 = st.columns([3, 1])
     with col_orc1:
         prod_orc = st.text_input("Produto", value=receita_para_orc if receita_para_orc else nome_produto_final)
     with col_orc2:
-        # Preço Unitário continua sendo usado para o cálculo interno, mas não aparecerá na tabela final
-        valor_padrao = preco_venda_final if prod_orc == nome_produto_final and preco_venda_final > 0 else 0.0
-        p_unit_orc = st.number_input("Preço Unitário (R$)", min_value=0.0, value=valor_padrao, format="%.2f")
-    with col_orc3:
         qtd_orc = st.number_input("Quantidade", min_value=1, value=1)
 
     col_orc4, col_orc5, col_orc6 = st.columns([1, 1, 1])
@@ -239,7 +235,9 @@ def main():
     with col_orc6:
         st.write("")
         if st.button("➕ Adicionar Item", use_container_width=True):
-            subtotal_item = (p_unit_orc * qtd_orc) + entrega_orc + emb_extra_orc
+            # O custo unitário é o preço_venda_final calculado no topo, ou 0 se for produto novo sem preço
+            custo_base = preco_venda_final if prod_orc == nome_produto_final else 0.0
+            subtotal_item = (custo_base * qtd_orc) + entrega_orc + emb_extra_orc
             st.session_state.carrinho.append({
                 "Produto": prod_orc,
                 "Qtd": qtd_orc,
@@ -249,7 +247,7 @@ def main():
 
     if st.session_state.carrinho:
         df_carrinho = pd.DataFrame(st.session_state.carrinho)
-        # Exibe apenas as colunas: Produto, Qtd e Subtotal
+        # Exibe apenas Produto, Qtd e Subtotal
         st.table(df_carrinho.style.format({"Subtotal": "R$ {:.2f}"}))
         
         total_geral_orc = df_carrinho["Subtotal"].sum()
