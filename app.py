@@ -127,11 +127,11 @@ def main():
         for i in range(int(n_itens_input)):
             c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
             with c1:
-                lista_nomes = [""] + df_ing['nome'].tolist()
+                lista_nomes_ing = [""] + df_ing['nome'].tolist()
                 idx_def = 0
-                if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes:
-                    idx_def = lista_nomes.index(st.session_state[f"nome_{i}"])
-                escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_def)
+                if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes_ing:
+                    idx_def = lista_nomes_ing.index(st.session_state[f"nome_{i}"])
+                escolha = st.selectbox(f"Item {i+1}", options=lista_nomes_ing, key=f"nome_{i}", index=idx_def)
             
             if escolha != "":
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
@@ -219,35 +219,38 @@ def main():
     with col_cli3:
         data_orcamento = st.date_input("Data do Orçamento:", value=date.today())
 
-    receita_para_orc = st.selectbox("Selecione uma Receita para o Orçamento:", [""] + receitas_nomes, key="sel_orc")
+    # ALTERAÇÃO: Busca na aba de INGREDIENTES agora
+    lista_ing_orc = [""] + df_ing['nome'].tolist()
+    item_selecionado = st.selectbox("Selecione o Ingrediente para Orçamento:", options=lista_ing_orc, key="sel_ing_orc")
 
     col_orc1, col_orc2 = st.columns([3, 1])
     with col_orc1:
-        prod_orc = st.text_input("Produto", value=receita_para_orc if receita_para_orc else nome_produto_final)
+        # Mostra o item selecionado
+        st.write(f"Item: **{item_selecionado if item_selecionado else 'Nenhum selecionado'}**")
     with col_orc2:
-        qtd_orc = st.number_input("Quantidade", min_value=1, value=1)
+        qtd_orc = st.number_input("Quantidade", min_value=1, value=1, key="qtd_orc_final")
 
     col_orc4, col_orc5, col_orc6 = st.columns([1, 1, 1])
     with col_orc4:
-        entrega_orc = st.number_input("Taxa de Entrega (R$)", min_value=0.0, value=0.0)
+        entrega_orc = st.number_input("Taxa de Entrega (R$)", min_value=0.0, value=0.0, key="ent_orc_final")
     with col_orc5:
-        emb_extra_orc = st.number_input("Embalagem Extra (R$)", min_value=0.0, value=0.0)
+        emb_extra_orc = st.number_input("Embalagem Extra (R$)", min_value=0.0, value=0.0, key="emb_orc_final")
     with col_orc6:
         st.write("")
         if st.button("➕ Adicionar Item", use_container_width=True):
-            # O custo unitário é o preço_venda_final calculado no topo, ou 0 se for produto novo sem preço
-            custo_base = preco_venda_final if prod_orc == nome_produto_final else 0.0
-            subtotal_item = (custo_base * qtd_orc) + entrega_orc + emb_extra_orc
-            st.session_state.carrinho.append({
-                "Produto": prod_orc,
-                "Qtd": qtd_orc,
-                "Subtotal": subtotal_item
-            })
-            st.rerun()
+            if item_selecionado != "":
+                # Pega o preço diretamente da planilha de ingredientes
+                preco_planilha = float(df_ing[df_ing['nome'] == item_selecionado]['preco'].iloc[0])
+                subtotal_item = (preco_planilha * qtd_orc) + entrega_orc + emb_extra_orc
+                st.session_state.carrinho.append({
+                    "Produto": item_selecionado,
+                    "Qtd": qtd_orc,
+                    "Subtotal": subtotal_item
+                })
+                st.rerun()
 
     if st.session_state.carrinho:
         df_carrinho = pd.DataFrame(st.session_state.carrinho)
-        # Exibe apenas Produto, Qtd e Subtotal
         st.table(df_carrinho.style.format({"Subtotal": "R$ {:.2f}"}))
         
         total_geral_orc = df_carrinho["Subtotal"].sum()
