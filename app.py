@@ -106,6 +106,10 @@ def exportar_pdf(cliente, pedido, itens, total):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def main():
+    # Garante que o carrinho não seja resetado por interferência de widgets
+    if "carrinho_orc" not in st.session_state:
+        st.session_state.carrinho_orc = []
+
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
 
@@ -228,7 +232,7 @@ def main():
         with res2:
             st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
 
-    # --- SEÇÃO DE ORÇAMENTO (VOLTADA AO ORIGINAL) ---
+    # --- SEÇÃO DE ORÇAMENTO ---
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     
@@ -245,9 +249,11 @@ def main():
         item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
         qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc")
         
-        if st.button("➕ Adicionar Item ao Grupo"):
-            if item_escolhido:
+        if st.button("➕ Adicionar Item ao Grupo", use_container_width=True):
+            if item_escolhido != "":
+                # Captura os dados do item antes do rerun
                 p_unit_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
+                # Adiciona à lista de forma segura
                 st.session_state.carrinho_orc.append({"nome": item_escolhido, "qtd": qtd_orc, "preco_puro": p_unit_puro})
                 st.rerun()
 
@@ -257,7 +263,7 @@ def main():
             lista_pdf = []
 
             for idx, it in enumerate(st.session_state.carrinho_orc):
-                c = st.columns([3, 1, 1.5, 1.5, 2, 0.5]) # Colunas originais
+                c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
                 v_lucro_it = (v_custo_producao_unit * (margem_lucro/100)) * it['qtd']
@@ -273,12 +279,13 @@ def main():
                 c[3].write(f"R$ {v_unit_custo_exibicao:.2f}")
                 c[4].write(f"**R$ {v_venda_it:.2f}**")
                 if c[5].button("❌", key=f"del_orc_{idx}"):
-                    st.session_state.carrinho_orc.pop(idx); st.rerun()
+                    st.session_state.carrinho_orc.pop(idx)
+                    st.rerun()
             
             st.divider()
             f1, f2 = st.columns(2)
-            frete_final = f1.number_input("Taxa de Frete Total (R$)", value=0.0)
-            emb_final = f2.number_input("Taxa de Embalagem Total (R$)", value=0.0)
+            frete_final = f1.number_input("Taxa de Frete Total (R$)", value=0.0, key="frete_orc")
+            emb_final = f2.number_input("Taxa de Embalagem Total (R$)", value=0.0, key="emb_orc")
             
             v_subtotal = total_venda_bruta_acumulada + frete_final + emb_final
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
@@ -300,9 +307,9 @@ def main():
 
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
-                st.session_state.cli_orc = "" # Limpa nome
-                st.session_state.tel_orc = "" # Limpa telefone
-                st.session_state.grupo_orc = "" # Limpa produto
+                st.session_state.cli_orc = ""
+                st.session_state.tel_orc = ""
+                st.session_state.grupo_orc = ""
                 st.rerun()
 
     with t2:
