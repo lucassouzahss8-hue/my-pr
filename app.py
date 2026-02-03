@@ -162,8 +162,6 @@ def main():
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
     v_taxa_financeira = (preco_venda_produto + taxa_entrega_base) * t_percentual
     preco_venda_final = preco_venda_produto + taxa_entrega_base + v_taxa_financeira
-    cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
-    cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
 
     # --- TABELA DETALHADA E BOX DE RESULTADO (LAYOUT ORIGINAL) ---
     st.divider()
@@ -171,8 +169,8 @@ def main():
     with res1:
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
-            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_base:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_base:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -188,65 +186,64 @@ def main():
         st.markdown(f"""
         <div class='resultado-box'>
             <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
-            <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
-            <hr style='border-color: #4b5563;'>
-            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
-            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
+            <p>Lucro Líquido: R$ {lucro_valor:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ABA DE ORÇAMENTO (AGORA COM SELEÇÃO DE RECEITAS SALVAS) ---
+    # --- ABA DE ORÇAMENTO ATUALIZADA ---
     st.divider()
-    with st.expander("📝 Gerar Orçamento de Receitas Salvas"):
+    with st.expander("📝 Gerar Orçamento"):
         st.subheader("Dados do Cliente")
         c_orc1, c_orc2, c_orc3 = st.columns(3)
         with c_orc1: cliente = st.text_input("Nome do Cliente", key="cli_orc")
-        with c_orc2: tel_orc = st.text_input("WhatsApp/Telefone", key="tel_orc")
+        with c_orc2: tel_orc = st.text_input("WhatsApp", key="tel_orc")
         with c_orc3: data_orc = st.date_input("Data", value=date.today(), key="data_orc")
 
         st.divider()
         st.subheader("Escolha a Receita Salva")
-        # Aqui você seleciona as receitas que já existem no banco
+        
+        # O campo de Produto agora é a seleção da receita
         receita_orc = st.selectbox("Selecione a Receita para o Orçamento:", [""] + receitas_nomes, key="sel_orc")
         
-        # Se você selecionar a receita atual que está aberta, ele usa o preço calculado na tela
-        # Se selecionar outra, ele permite que você confirme o valor
-        valor_base_orc = preco_venda_final if receita_orc == nome_produto_final else 0.0
+        # O valor unitário é o preço final calculado, mas fica oculto (sem input)
+        valor_un_invisivel = preco_venda_final if receita_orc == nome_produto_final else 0.0
         
         col_o1, col_o2, col_o3 = st.columns([2, 1, 1])
         with col_o1:
-            prod_final_orc = st.text_input("Produto", value=receita_orc)
-        with col_o2:
-            v_unit_orc = st.number_input("Preço Unitário (R$)", value=valor_base_orc, step=0.01)
-        with col_o3:
+            # Quantidade
             qtd_orc = st.number_input("Quantidade", min_value=1, value=1, key="qtd_orc_final")
-
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
+        with col_o2:
+            # Taxa de Entrega
             frete_orc = st.number_input("Taxa de Entrega (R$)", value=taxa_entrega_base)
-        with col_f2:
+        with col_o3:
+            # Embalagem Extra
             emb_ext_orc = st.number_input("Embalagem Extra (R$)", value=0.0)
 
-        total_pedido = (v_unit_orc * qtd_orc) + frete_orc + emb_ext_orc
+        # Cálculo final usando o valor unitário que já tem lucros e taxas
+        total_pedido = (valor_un_invisivel * qtd_orc) + frete_orc + emb_ext_orc
+        
         st.markdown(f"## **Total: R$ {total_pedido:.2f}**")
 
         if st.button("Gerar orçamento para whatsapp"):
-            resumo_zap = f"""
+            if not receita_orc:
+                st.error("Selecione uma receita primeiro!")
+            else:
+                resumo_zap = f"""
 📋 *ORÇAMENTO*
 📅 Data: {data_orc.strftime('%d/%m/%Y')}
 👤 Cliente: {cliente}
+📞 WhatsApp: {tel_orc}
 --------------------------
-🍰 *Produto:* {prod_final_orc}
+🍰 *Produto:* {receita_orc}
 🔢 *Quantidade:* {qtd_orc}
-💰 *Valor Unit.:* R$ {v_unit_orc:.2f}
+💰 *Valor Unit.:* R$ {valor_un_invisivel:.2f}
 🚚 *Entrega:* R$ {frete_orc:.2f}
 🛍️ *Embalagem:* R$ {emb_ext_orc:.2f}
 --------------------------
 ✅ *TOTAL: R$ {total_pedido:.2f}*
 """
-            st.code(resumo_zap, language="text")
+                st.code(resumo_zap, language="text")
 
 if __name__ == "__main__":
     main()
