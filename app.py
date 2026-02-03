@@ -214,15 +214,11 @@ def main():
         tel_cliente = c_cli2.text_input("Telefone", placeholder="(00) 00000-0000")
         data_orc_input = c_cli3.date_input("Data do Orçamento", value=date.today())
         
-        c_tax1, c_tax2, c_tax3 = st.columns([1, 1, 1])
-        margem_orc = c_tax1.number_input("Margem de Lucro Orçamento (%)", value=margem_lucro)
-        pag_orc = c_tax2.selectbox("Forma de Pagamento Orçamento", ["Crédito", "PIX"], index=0 if forma_pagamento=="Crédito" else 1)
-        dist_orc = c_tax3.number_input("Distância KM (Orçamento)", min_value=0.0, value=distancia_km)
+        # BOTOES DE TAXAS REMOVIDOS DAQUI - O ORÇAMENTO AGORA USA AS TAXAS GLOBAIS ACIMA
 
         nome_produto_grupo = st.text_input("📌 Nome do Produto (Grupo)", placeholder="Ex: Kit Festa Especial")
 
         st.divider()
-        # Removidos os botões manuais de frete e embalagem, usando agora as taxas globais
         co1, co2 = st.columns([3, 1])
         item_sel = co1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_item_orc")
         qtd_orc = co2.number_input("Qtd", min_value=1, value=1, key="qtd_item_orc")
@@ -232,7 +228,6 @@ def main():
                 filtro = df_ing[df_ing['nome'] == item_sel]
                 if not filtro.empty:
                     p_unit_ing = float(filtro['preco'].iloc[0])
-                    # Calcula o custo unitário já com as taxas de quebra e despesas do precificador
                     v_quebra_item = p_unit_ing * (perc_quebra / 100)
                     v_desp_item = p_unit_ing * (perc_despesas / 100)
                     custo_total_unitario = p_unit_ing + v_quebra_item + v_desp_item
@@ -250,7 +245,6 @@ def main():
 
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 cols = st.columns([4, 1, 2, 0.5])
-                # Correção do erro KeyError garantindo que as chaves existem
                 sub_custo = it.get('Custo_Total_Unit', 0.0) * it.get('Qtd', 1)
                 total_custo_grupo += sub_custo
                 
@@ -261,10 +255,10 @@ def main():
                     st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
             
-            # Cálculo final automático baseado nas taxas da Sidebar e Precificador
-            preco_venda_itens = total_custo_grupo * (1 + (margem_orc / 100))
-            taxa_entrega_orc = (dist_orc - km_gratis) * valor_por_km if dist_orc > km_gratis else 0.0
-            t_perc_orc = (taxa_credito_input / 100) if pag_orc == "Crédito" else 0.0
+            # CÁLCULO FINAL USANDO AS TAXAS GLOBAIS (DEFINIDAS NO TOPO/PRECIFICADOR)
+            preco_venda_itens = total_custo_grupo * (1 + (margem_lucro / 100))
+            taxa_entrega_orc = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+            t_perc_orc = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             taxa_fin_orc = (preco_venda_itens + taxa_entrega_orc) * t_perc_orc
             total_final_orc = preco_venda_itens + taxa_entrega_orc + taxa_fin_orc
 
@@ -275,7 +269,7 @@ def main():
                 msg = f"*ORÇAMENTO: {nome_produto_grupo}*\nData: {data_orc_input.strftime('%d/%m/%Y')}\nCliente: {nome_cliente}\n" + "-"*20 + "\n"
                 for i in st.session_state.carrinho_orc:
                     msg += f"• {i['Item']} (x{i['Qtd']})\n"
-                msg += "-"*20 + f"\n*Valor Total: R$ {total_final_orc:.2f}* ({pag_orc})"
+                msg += "-"*20 + f"\n*Valor Total: R$ {total_final_orc:.2f}* ({forma_pagamento})"
                 st.code(msg, language="text")
             
             if b2.button("💾 Salvar Orçamento", use_container_width=True):
