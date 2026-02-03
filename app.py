@@ -89,7 +89,7 @@ def main():
         km_gratis = st.number_input("KM Isentos", value=5)
         valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
 
-    # --- GERENCIAR RECEITAS ---
+    # --- GERENCIAR RECEITAS (MANTIDO) ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
@@ -215,7 +215,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # =========================================================
-    # --- SEÇÃO DE ORÇAMENTO (FRETE/EMB NO FINAL) ---
+    # --- SEÇÃO DE ORÇAMENTO ---
     # =========================================================
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
@@ -247,8 +247,8 @@ def main():
 
         if st.session_state.carrinho_orc:
             st.write(f"#### Itens de: {nome_grupo_pedido}")
-            total_custo_fabrica_orc = 0.0
-            total_venda_bruta_orc = 0.0
+            total_custo_insumos_orc = 0.0
+            total_venda_acumulada_orc = 0.0
 
             cols_h = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
             cols_h[0].write("**Produto**")
@@ -260,21 +260,22 @@ def main():
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 
-                # CÁLCULOS UNITÁRIOS (Sem Frete/Emb aqui, eles entram no final)
+                # UNITÁRIO CUSTO (Insumo + Quebra + Despesas Gerais fixas)
                 v_quebra_it = it['preco_puro'] * (perc_quebra / 100)
                 v_desp_it = it['preco_puro'] * (perc_despesas / 100)
+                v_unit_custo_total = it['preco_puro'] + v_quebra_it + v_desp_it
                 
-                v_unit_custo_prod = it['preco_puro'] + v_quebra_it + v_desp_it
-                v_venda_unit = v_unit_custo_prod * (1 + (margem_lucro / 100))
-                sub_venda = v_venda_unit * it['qtd']
+                # VALOR DE VENDA (Custo + Lucro da tela)
+                v_venda_unit_final = v_unit_custo_total * (1 + (margem_lucro / 100))
+                sub_venda = v_venda_unit_final * it['qtd']
                 
-                total_custo_fabrica_orc += (it['preco_puro'] * it['qtd'])
-                total_venda_bruta_orc += sub_venda
+                total_custo_insumos_orc += (it['preco_puro'] * it['qtd'])
+                total_venda_acumulada_orc += sub_venda
                 
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
-                c[3].write(f"R$ {v_unit_custo_prod:.2f}")
+                c[3].write(f"R$ {v_unit_custo_total:.2f}")
                 c[4].write(f"**R$ {sub_venda:.2f}**")
                 
                 if c[5].button("❌", key=f"del_orc_{idx}"):
@@ -282,26 +283,26 @@ def main():
                     st.rerun()
             
             st.divider()
-            
-            # --- ADICIONAIS DO ORÇAMENTO (FINAL) ---
             st.write("#### Adicionais do Pedido")
             col_f1, col_f2 = st.columns(2)
             frete_final = col_f1.number_input("Taxa de Frete Total (R$)", value=0.0)
             emb_final = col_f2.number_input("Taxa de Embalagem Total (R$)", value=0.0)
             
-            # Cálculo Final do Orçamento
-            v_venda_com_adicionais = total_venda_bruta_orc + frete_final + emb_final
-            v_taxa_cartao_orc = v_venda_com_adicionais * (taxa_credito_input/100) if forma_pagamento == "Crédito" else 0.0
-            total_geral_orc = v_venda_com_adicionais + v_taxa_cartao_orc
+            # CÁLCULO FINAL (Soma produtos + frete + embalagem)
+            subtotal_com_adicionais = total_venda_acumulada_orc + frete_final + emb_final
+            
+            # TAXA DE CARTÃO (Usando a variável fixa 'taxa_credito_input' definida lá em cima)
+            v_taxa_cartao_orc = subtotal_com_adicionais * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+            
+            total_geral_orc = subtotal_com_adicionais + v_taxa_cartao_orc
             
             res_c1, res_c2 = st.columns(2)
             with res_c1:
-                st.write(f"💵 Custo Puro Insumos: R$ {total_custo_fabrica_orc:.2f}")
-                st.write(f"📈 Margem Lucro: {margem_lucro}%")
+                st.write(f"💵 Total Insumos (Puro): R$ {total_custo_insumos_orc:.2f}")
                 if forma_pagamento == "Crédito":
-                    st.write(f"💳 Taxa Cartão: R$ {v_taxa_cartao_orc:.2f}")
+                    st.write(f"💳 Taxa Cartão ({taxa_credito_input}%): R$ {v_taxa_cartao_orc:.2f}")
             with res_c2:
-                st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
+                st.markdown(f"### TOTAL FINAL: R$ {total_geral_orc:.2f}")
                 
             b_col1, b_col2, b_col3 = st.columns(3)
             if b_col1.button("📱 WhatsApp", use_container_width=True):
@@ -314,9 +315,14 @@ def main():
             
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
-                novo = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
+                novo = pd.DataFrame([{
+                    "Data": data_orc.strftime("%d/%m/%Y"), 
+                    "Cliente": nome_cliente, 
+                    "Pedido": nome_grupo_pedido, 
+                    "Valor_Final": f"R$ {total_geral_orc:.2f}"
+                }])
                 conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo], ignore_index=True))
-                st.success("Salvo com sucesso!")
+                st.success("Salvo!")
             
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
@@ -326,8 +332,6 @@ def main():
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
             st.dataframe(df_salvos, use_container_width=True)
-        else:
-            st.info("Nenhum orçamento salvo.")
 
 if __name__ == "__main__":
     main()
