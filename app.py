@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
+from datetime import date
 
 # 1. Configuração da Página
 st.set_page_config(
@@ -101,7 +102,6 @@ def main():
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
-        # MARGEM FIXA EM 135%
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135)
     with col_p3:
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
@@ -151,13 +151,12 @@ def main():
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
-        # QUEBRA FIXA EM 2%
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
     # --- CÁLCULOS FINAIS ---
-    taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+    taxa_entrega_base = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
@@ -167,8 +166,8 @@ def main():
     preco_venda_produto = custo_total_prod + lucro_valor
     
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-    v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
-    preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
+    v_taxa_financeira = (preco_venda_produto + taxa_entrega_base) * t_percentual
+    preco_venda_final = preco_venda_produto + taxa_entrega_base + v_taxa_financeira
 
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     
@@ -183,7 +182,7 @@ def main():
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
             "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_base:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -207,6 +206,55 @@ def main():
             <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
+
+    # --- ABA DE ORÇAMENTO (ADICIONADA AO FINAL) ---
+    st.divider()
+    with st.expander("📝 Criar Novo Orçamento"):
+        st.subheader("Dados do Cliente")
+        col_o1, col_o2, col_o3 = st.columns(3)
+        with col_o1:
+            cliente = st.text_input("Nome do Cliente")
+        with col_o2:
+            contato = st.text_input("WhatsApp/Telefone")
+        with col_o3:
+            data_hoje = st.date_input("Data", value=date.today())
+            
+        st.divider()
+        st.subheader("Produtos e Entrega")
+        col_i1, col_i2, col_i3 = st.columns([2, 1, 1])
+        with col_i1:
+            # Puxa o nome do produto final que já está no input lá em cima
+            nome_orc = st.text_input("Item", value=nome_produto_final)
+        with col_i2:
+            # Puxa o valor final calculado na sua tabela detalhada automaticamente
+            v_unit_orc = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
+        with col_i3:
+            qtd_orc = st.number_input("Qtd", min_value=1, value=1)
+            
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+            taxa_entrega_final = st.number_input("Taxa de Entrega (R$)", value=taxa_entrega_base)
+        with col_e2:
+            emb_ext = st.number_input("Embalagem Externa/Sacola (R$)", value=0.0)
+            
+        total_pedido = (v_unit_orc * qtd_orc) + taxa_entrega_final + emb_ext
+        st.markdown(f"## **Total do Pedido: R$ {total_pedido:.2f}**")
+        
+        if st.button("Gerar orçamento para whatsapp"):
+            mensagem = f"""
+📋 *ORÇAMENTO*
+📅 Data: {data_hoje.strftime('%d/%m/%Y')}
+👤 Cliente: {cliente}
+--------------------------
+🍰 *Produto:* {nome_orc}
+🔢 *Quantidade:* {qtd_orc}
+💰 *Valor Unit.:* R$ {v_unit_orc:.2f}
+🚚 *Entrega:* R$ {taxa_entrega_final:.2f}
+🛍️ *Embalagem:* R$ {emb_ext:.2f}
+--------------------------
+✅ *TOTAL: R$ {total_pedido:.2f}*
+"""
+            st.code(mensagem, language="text")
 
 if __name__ == "__main__":
     main()
