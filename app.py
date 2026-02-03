@@ -215,7 +215,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # =========================================================
-    # --- SEÇÃO DE ORÇAMENTO (SÓ MEXI AQUI!) ---
+    # --- SEÇÃO DE ORÇAMENTO ---
     # =========================================================
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
@@ -247,7 +247,8 @@ def main():
 
         if st.session_state.carrinho_orc:
             st.write(f"#### Itens de: {nome_grupo_pedido}")
-            total_venda_bruta_orc = 0.0
+            total_venda_bruta_acumulada = 0.0
+            total_lucro_acumulado = 0.0
 
             cols_h = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
             cols_h[0].write("**Produto**")
@@ -259,13 +260,16 @@ def main():
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 
-                # --- UNITÁRIO CUSTO = PURO * QTD ---
+                # Unitário Custo (Insumo Puro * Quantidade) conforme pedido anteriormente
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 
-                # Cálculo da Venda (Margem sobre o custo total de produção)
-                v_custo_real = it['preco_puro'] + (it['preco_puro'] * (perc_quebra / 100)) + (it['preco_puro'] * (perc_despesas / 100))
-                v_venda_it = (v_custo_real * (1 + (margem_lucro / 100))) * it['qtd']
-                total_venda_bruta_orc += v_venda_it
+                # Lógica de Venda e Lucro (mantendo a base do precificador)
+                v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
+                v_lucro_it = (v_custo_producao_unit * (margem_lucro/100)) * it['qtd']
+                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
+                
+                total_venda_bruta_acumulada += v_venda_it
+                total_lucro_acumulado += v_lucro_it
                 
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
@@ -282,15 +286,40 @@ def main():
             frete_final = col_f1.number_input("Taxa de Frete Total (R$)", value=0.0)
             emb_final = col_f2.number_input("Taxa de Embalagem Total (R$)", value=0.0)
             
-            # --- TAXA CARTÃO FIXA DO TOPO ---
-            v_subtotal = total_venda_bruta_orc + frete_final + emb_final
+            # Totais do Orçamento
+            v_subtotal = total_venda_bruta_acumulada + frete_final + emb_final
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             
+            # Exibição dos Resultados do Orçamento
             st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
             st.write(f"💳 Taxa Cartão ({taxa_credito_input}%): R$ {v_taxa_cartao_orc:.2f}")
+            
+            # --- NOVOS CAMPOS PEDIDOS ---
+            st.info(f"💰 **Lucro Líquido:** R$ {total_lucro_acumulado:.2f}  |  📈 **Margem aplicada:** {margem_lucro}%")
+            
+            # --- BOTOES PEDIDOS ---
+            b1, b2, b3 = st.columns(3)
+            
+            if b1.button("📑 Gerar Resumo Orçamento", use_container_width=True):
+                resumo_texto = f"*ORÇAMENTO: {nome_cliente}*\n*Pedido:* {nome_grupo_pedido}\n\n"
+                for i in st.session_state.carrinho_orc:
+                    resumo_texto += f"• {i['nome']} (x{i['qtd']})\n"
+                resumo_texto += f"\n*Total:* R$ {total_geral_orc:.2f}"
+                st.text_area("Copie o resumo abaixo:", value=resumo_texto, height=150)
 
-            if st.button("🗑️ Limpar Pedido"):
+            if b2.button("💾 Salvar Orçamento", use_container_width=True):
+                df_hist = carregar_historico_orc()
+                novo_reg = pd.DataFrame([{
+                    "Data": data_orc.strftime("%d/%m/%Y"),
+                    "Cliente": nome_cliente,
+                    "Pedido": nome_grupo_pedido,
+                    "Valor_Final": f"R$ {total_geral_orc:.2f}"
+                }])
+                conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
+                st.success("Orçamento salvo com sucesso!")
+
+            if b3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
 
