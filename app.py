@@ -113,7 +113,6 @@ def main():
 
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
-        # ALTERAÇÃO 1: Taxa de crédito fixa em 3.19
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=3.19, step=0.01)
         st.divider()
         km_gratis = st.number_input("KM Isentos", value=5)
@@ -149,7 +148,7 @@ def main():
     st.divider()
 
     if df_ing.empty:
-        st.warning("⚠️ Aguardando carregamento dos ingredientes...")
+        st.warning("⚠️ Aguardando carregamento ou adicione ingredientes na aba 'Ingredientes' da sua planilha.")
     
     custo_ingredientes_total = 0.0
     perc_quebra = 2 
@@ -229,78 +228,81 @@ def main():
         with res2:
             st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
 
-    # --- SEÇÃO DE ORÇAMENTO ---
+    # --- SEÇÃO DE ORÇAMENTO (VOLTADA AO ORIGINAL) ---
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
     with t1:
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
-        nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc_input")
-        tel_cliente = c_cli2.text_input("Telefone", key="tel_orc_input")
-        data_orc = c_cli3.date_input("Data do Orçamento", value=date.today(), key="data_orc_input")
-        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", key="grupo_orc_input")
+        nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc")
+        tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
+        data_orc = c_cli3.date_input("Data do Orçamento", value=date.today(), key="data_orc")
+        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", key="grupo_orc")
         
         st.write("---")
         c_it1, c_it2 = st.columns([3, 1])
-        item_escolhido = c_it1.selectbox("Selecione o Item:", options=[""] + df_ing['nome'].tolist(), key="sel_item_orc")
-        qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="qtd_item_orc")
+        item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
+        qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc")
         
-        if st.button("➕ Adicionar Item ao Grupo", use_container_width=True):
-            if item_escolhido != "":
-                p_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
-                st.session_state.carrinho_orc.append({"nome": item_escolhido, "qtd": qtd_orc, "preco_puro": p_puro})
+        if st.button("➕ Adicionar Item ao Grupo"):
+            if item_escolhido:
+                p_unit_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
+                st.session_state.carrinho_orc.append({"nome": item_escolhido, "qtd": qtd_orc, "preco_puro": p_unit_puro})
                 st.rerun()
 
         if st.session_state.carrinho_orc:
-            total_venda_acum = 0.0
-            total_lucro_acum = 0.0
+            total_venda_bruta_acumulada = 0.0
+            total_lucro_acumulado = 0.0
             lista_pdf = []
 
             for idx, it in enumerate(st.session_state.carrinho_orc):
-                c = st.columns([4, 1, 2, 0.5])
-                v_custo_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
-                v_venda_it = (v_custo_unit * (1 + (margem_lucro/100))) * it['qtd']
-                v_lucro_it = (v_custo_unit * (margem_lucro/100)) * it['qtd']
+                c = st.columns([3, 1, 1.5, 1.5, 2, 0.5]) # Colunas originais
+                v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
+                v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
+                v_lucro_it = (v_custo_producao_unit * (margem_lucro/100)) * it['qtd']
+                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
                 
-                total_venda_acum += v_venda_it
-                total_lucro_acum += v_lucro_it
+                total_venda_bruta_acumulada += v_venda_it
+                total_lucro_acumulado += v_lucro_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
                 
-                c[0].write(f"**{it['nome']}**")
+                c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
-                c[2].write(f"R$ {v_venda_it:.2f}")
-                if c[3].button("❌", key=f"del_item_{idx}"):
-                    st.session_state.carrinho_orc.pop(idx)
-                    st.rerun()
+                c[2].write(f"R$ {it['preco_puro']:.2f}")
+                c[3].write(f"R$ {v_unit_custo_exibicao:.2f}")
+                c[4].write(f"**R$ {v_venda_it:.2f}**")
+                if c[5].button("❌", key=f"del_orc_{idx}"):
+                    st.session_state.carrinho_orc.pop(idx); st.rerun()
             
             st.divider()
             f1, f2 = st.columns(2)
-            fr_f = f1.number_input("Frete Total", value=0.0, key="frete_orc")
-            em_f = f2.number_input("Embalagem Total", value=0.0, key="emb_orc")
+            frete_final = f1.number_input("Taxa de Frete Total (R$)", value=0.0)
+            emb_final = f2.number_input("Taxa de Embalagem Total (R$)", value=0.0)
             
-            v_sub = total_venda_acum + fr_f + em_f
-            v_taxa = v_sub * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-            total_geral = v_sub + v_taxa
+            v_subtotal = total_venda_bruta_acumulada + frete_final + emb_final
+            v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+            total_geral_orc = v_subtotal + v_taxa_cartao_orc
             
-            st.markdown(f"### TOTAL: R$ {total_geral:.2f}")
+            st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
+            st.write(f"💳 Taxa Cartão ({taxa_credito_input}%): R$ {v_taxa_cartao_orc:.2f}")
+            st.info(f"💰 **Lucro Líquido:** R$ {total_lucro_acumulado:.2f}  |  📈 **Margem aplicada:** {margem_lucro}%")
             
             b_col1, b_col2, b_col3 = st.columns(3)
-            pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral)
-            b_col1.download_button("📄 Gerar Pdf Orçamento", data=pdf_bytes, file_name=f"Orcamento_{nome_cliente}.pdf", mime="application/pdf", use_container_width=True)
+            pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
+            b_col1.download_button(label="📄 Gerar Pdf Orçamento", data=pdf_bytes, file_name=f"Orcamento_{nome_cliente}.pdf", mime="application/pdf", use_container_width=True)
 
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
-                novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral:.2f}"}])
+                novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
                 conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
-                st.success("Salvo!")
+                st.success("Orçamento salvo!")
 
-            # ALTERAÇÃO 2: Botão Limpar Pedido reseta campos de texto e a lista de itens
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
-                st.session_state["cli_orc_input"] = ""
-                st.session_state["tel_orc_input"] = ""
-                st.session_state["grupo_orc_input"] = ""
+                st.session_state.cli_orc = "" # Limpa nome
+                st.session_state.tel_orc = "" # Limpa telefone
+                st.session_state.grupo_orc = "" # Limpa produto
                 st.rerun()
 
     with t2:
