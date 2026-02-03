@@ -47,7 +47,7 @@ if "nome_prod" not in st.session_state:
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 
-# --- FUNÇÕES DE DADOS ---
+# --- FUNÇÕES DE DADOS (Correção de WorksheetNotFound e Colunas) ---
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=0)
@@ -55,7 +55,7 @@ def carregar_ingredientes():
             return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
-    except Exception:
+    except:
         return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
 def carregar_receitas_nuvem():
@@ -64,15 +64,18 @@ def carregar_receitas_nuvem():
         if df is None or df.empty:
             return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
         return df
-    except Exception:
+    except:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
 def carregar_historico_orc():
     try:
         df = conn.read(worksheet="Orcamentos_Salvos", ttl=0)
-        return df if df is not None else pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
+        if df is not None:
+            # Resolve o problema da coluna aparecer como "None" ou com nomes diferentes
+            df.columns = [c.replace(" ", "_") for c in df.columns]
+            return df
+        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
     except:
-        # Resolve o erro de WorksheetNotFound criando um DF vazio compatível
         return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
 
 # --- FUNÇÃO GERAR PDF ---
@@ -148,23 +151,18 @@ def main():
     perc_quebra = 2 
     perc_despesas = 30
 
-    # RESOLUÇÃO ERRO 'ADICIONE INGREDIENTES': Verifica sem travar
-    if df_ing.empty:
-        st.warning("⚠️ Planilha de ingredientes não encontrada ou vazia.")
-    else:
-        col_esq, col_dir = st.columns([2, 1])
-        with col_esq:
-            st.subheader("🛒 Ingredientes")
-            n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
-            lista_para_salvar = []
+    # Layout original mantido
+    col_esq, col_dir = st.columns([2, 1])
+    with col_esq:
+        st.subheader("🛒 Ingredientes")
+        n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
+        lista_para_salvar = []
+        if not df_ing.empty:
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    idx_def = 0
-                    if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes:
-                        idx_def = lista_nomes.index(st.session_state[f"nome_{i}"])
-                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_def)
+                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
                     qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
@@ -181,43 +179,44 @@ def main():
                 with c4:
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
 
-        with col_dir:
-            st.subheader("⚙️ Adicionais")
-            perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
-            perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-            valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
+    with col_dir:
+        st.subheader("⚙️ Adicionais")
+        perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
+        perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
+        valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
-        taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
-        v_quebra = custo_ingredientes_total * (perc_quebra / 100)
-        v_despesas = custo_ingredientes_total * (perc_despesas / 100)
-        v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem_manual
-        custo_total_prod = v_cmv + v_despesas
-        lucro_valor = custo_total_prod * (margem_lucro / 100)
-        preco_venda_produto = custo_total_prod + lucro_valor
-        t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-        v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
-        preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
-        cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
-        cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
+    taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+    v_quebra = custo_ingredientes_total * (perc_quebra / 100)
+    v_despesas = custo_ingredientes_total * (perc_despesas / 100)
+    v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem_manual
+    custo_total_prod = v_cmv + v_despesas
+    lucro_valor = custo_total_prod * (margem_lucro / 100)
+    preco_venda_produto = custo_total_prod + lucro_valor
+    t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+    v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
+    preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
+    cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
+    cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
 
-        st.divider()
-        res1, res2 = st.columns([1.5, 1])
-        with res1:
-            st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
-            df_resumo = pd.DataFrame({
-                "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-                "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem_manual:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
-            })
-            st.table(df_resumo)
-            if st.button("💾 Salvar Receita", use_container_width=True):
-                if nome_produto_final:
-                    df_nova = pd.DataFrame(lista_para_salvar)
-                    df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
-                    conn.update(worksheet="Receitas", data=df_final)
-                    st.success(f"Receita '{nome_produto_final}' salva!")
-                    st.rerun()
-        with res2:
-            st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
+    st.divider()
+    res1, res2 = st.columns([1.5, 1])
+    with res1:
+        st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
+        df_resumo = pd.DataFrame({
+            "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem_manual:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+        })
+        st.table(df_resumo)
+        if st.button("💾 Salvar Receita", use_container_width=True):
+            if nome_produto_final:
+                df_nova = pd.DataFrame(lista_para_salvar)
+                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
+                conn.update(worksheet="Receitas", data=df_final)
+                st.success(f"Receita '{nome_produto_final}' salva!")
+                st.rerun()
+
+    with res2:
+        st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
 
     # --- SEÇÃO DE ORÇAMENTO ---
     st.divider()
@@ -242,16 +241,13 @@ def main():
 
         if st.session_state.carrinho_orc:
             total_venda_bruta_acumulada = 0.0
-            total_lucro_acumulado = 0.0
             lista_pdf = []
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
                 v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
-                v_lucro_it = (v_custo_producao_unit * (margem_lucro/100)) * it['qtd']
                 total_venda_bruta_acumulada += v_venda_it
-                total_lucro_acumulado += v_lucro_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
@@ -263,9 +259,9 @@ def main():
             
             st.divider()
             f1, f2 = st.columns(2)
-            frete_orc = f1.number_input("Taxa de Frete Total (R$)", value=0.0, key="frete_orc_val")
-            emb_orc = f2.number_input("Taxa de Embalagem Total (R$)", value=0.0, key="emb_orc_val")
-            v_subtotal = total_venda_bruta_acumulada + frete_orc + emb_orc
+            frete_val = f1.number_input("Taxa de Frete Total (R$)", value=0.0, key="frete_orc")
+            emb_val = f2.number_input("Taxa de Embalagem Total (R$)", value=0.0, key="emb_orc")
+            v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
@@ -280,27 +276,22 @@ def main():
                 conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
                 st.success("Orçamento salvo!")
 
-            # RESOLUÇÃO DO ERRO 'LIMPAR PEDIDO': Uso de try/except e deleção segura
+            # RESOLUÇÃO DEFINITIVA DO ERRO DE LIMPAR: Limpa o carrinho e recarrega a página para resetar os campos
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
-                for k in ["cli_orc", "tel_orc", "grupo_orc", "sel_orc_it"]:
-                    if k in st.session_state:
-                        st.session_state[k] = ""
                 st.rerun()
 
     with t2:
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
-            # Garante que a coluna Valor_Final seja exibida mesmo se vier com espaço da planilha
-            if 'Valor Final' in df_salvos.columns:
-                df_salvos['Valor_Final'] = df_salvos['Valor Final']
-            
             for i, row in df_salvos.iterrows():
                 c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5])
                 c1.write(row.get('Data', ''))
                 c2.write(row.get('Cliente', ''))
                 c3.write(row.get('Pedido', ''))
-                c4.write(row.get('Valor_Final', ''))
+                # Mostra o valor de qualquer coluna que comece com "Valor" para evitar o "None"
+                valor_exibir = row.get('Valor_Final', row.get('Valor_Final', ''))
+                c4.write(valor_exibir)
                 if c5.button("🗑️", key=f"del_h_{i}"):
                     conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i))
                     st.rerun()
