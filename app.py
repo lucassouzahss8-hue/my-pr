@@ -40,12 +40,10 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- INICIALIZAÇÃO DO ESTADO ---
-if "n_itens" not in st.session_state:
-    st.session_state.n_itens = 1
-if "nome_prod" not in st.session_state:
-    st.session_state.nome_prod = ""
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
+if "n_itens" not in st.session_state:
+    st.session_state.n_itens = 1
 
 # --- FUNÇÕES DE DADOS ---
 def carregar_ingredientes():
@@ -61,7 +59,7 @@ def carregar_ingredientes():
 def carregar_receitas_nuvem():
     try:
         df = conn.read(worksheet="Receitas", ttl=0)
-        if df is None or df.empty or 'nome_receita' not in df.columns:
+        if df is None or df.empty:
             return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
         return df
     except Exception:
@@ -81,25 +79,21 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.set_font("Arial", 'B', 16)
     pdf.cell(200, 10, "ORÇAMENTO DETALHADO", ln=True, align='C')
     pdf.ln(10)
-    
     pdf.set_font("Arial", '', 12)
     pdf.cell(200, 10, f"Cliente: {cliente}", ln=True)
     pdf.cell(200, 10, f"Pedido: {pedido}", ln=True)
     pdf.cell(200, 10, f"Data: {date.today().strftime('%d/%m/%Y')}", ln=True)
     pdf.ln(5)
-    
     pdf.set_fill_color(30, 58, 138)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(100, 10, " Produto", border=1, fill=True)
     pdf.cell(40, 10, " Qtd", border=1, fill=True)
     pdf.cell(50, 10, " Subtotal", border=1, fill=True, ln=True)
-    
     pdf.set_text_color(0, 0, 0)
     for it in itens:
         pdf.cell(100, 10, f" {it['nome']}", border=1)
         pdf.cell(40, 10, f" {it['qtd']}", border=1)
         pdf.cell(50, 10, f" R$ {it['venda']:.2f}", border=1, ln=True)
-    
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
@@ -147,30 +141,23 @@ def main():
         
     st.divider()
 
-    # --- RESOLUÇÃO DO ERRO: Não trava o app com return ---
-    if df_ing.empty:
-        st.warning("⚠️ Carregando ingredientes da planilha... Aguarde um instante.")
-    
     custo_ingredientes_total = 0.0
     perc_quebra = 2 
     perc_despesas = 30
 
-    if not df_ing.empty:
+    if df_ing.empty:
+        st.warning("⚠️ Carregando dados da planilha...")
+    else:
         col_esq, col_dir = st.columns([2, 1])
         with col_esq:
             st.subheader("🛒 Ingredientes")
             n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
             lista_para_salvar = []
-
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    idx_def = 0
-                    if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes:
-                        idx_def = lista_nomes.index(st.session_state[f"nome_{i}"])
-                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_def)
-                
+                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
                     qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
@@ -243,7 +230,8 @@ def main():
         
         st.write("---")
         c_it1, c_it2 = st.columns([3, 1])
-        item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
+        lista_seletor = [""] + df_ing['nome'].tolist() if not df_ing.empty else [""]
+        item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=lista_seletor, key="sel_orc_it")
         qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc")
         
         if st.button("➕ Adicionar Item ao Grupo", use_container_width=True):
@@ -256,18 +244,15 @@ def main():
             total_venda_bruta_acumulada = 0.0
             total_lucro_acumulado = 0.0
             lista_pdf = []
-
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
-                v_lucro_it = (v_custo_producao_unit * (margem_lucro/100)) * it['qtd']
                 v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
-                
+                v_lucro_it = (v_custo_producao_unit * (margem_lucro/100)) * it['qtd']
                 total_venda_bruta_acumulada += v_venda_it
                 total_lucro_acumulado += v_lucro_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
-                
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
@@ -280,7 +265,6 @@ def main():
             f1, f2 = st.columns(2)
             frete_final = f1.number_input("Taxa de Frete Total (R$)", value=0.0, key="frete_orc")
             emb_final = f2.number_input("Taxa de Embalagem Total (R$)", value=0.0, key="emb_orc")
-            
             v_subtotal = total_venda_bruta_acumulada + frete_final + emb_final
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
@@ -291,7 +275,6 @@ def main():
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf Orçamento", data=pdf_bytes, file_name=f"Orcamento_{nome_cliente}.pdf", mime="application/pdf", use_container_width=True)
-
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
                 novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
@@ -308,7 +291,6 @@ def main():
     with t2:
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
-            if 'Valor Final' in df_salvos.columns: df_salvos = df_salvos.drop(columns=['Valor Final'])
             for i, row in df_salvos.iterrows():
                 c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5])
                 c1.write(row['Data']); c2.write(row['Cliente']); c3.write(row['Pedido']); c4.write(row['Valor_Final'])
