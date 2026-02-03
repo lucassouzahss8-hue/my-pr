@@ -163,14 +163,14 @@ def main():
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
-        valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
+        valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
     # --- CÁLCULOS FINAIS ---
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     
-    v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem
+    v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem_manual
     custo_total_prod = v_cmv + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_venda_produto = custo_total_prod + lucro_valor
@@ -189,7 +189,7 @@ def main():
         st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
             "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem_manual:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -215,7 +215,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # =========================================================
-    # --- SEÇÃO DE ORÇAMENTO (ADICIONADA) ---
+    # --- SEÇÃO DE ORÇAMENTO (FRETE/EMB NO FINAL) ---
     # =========================================================
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
@@ -224,63 +224,57 @@ def main():
     
     with t1:
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
-        nome_cliente = c_cli1.text_input("Nome do Cliente")
-        tel_cliente = c_cli2.text_input("Telefone")
-        data_orc = c_cli3.date_input("Data do Orçamento", value=date.today())
+        nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc")
+        tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
+        data_orc = c_cli3.date_input("Data do Orçamento", value=date.today(), key="data_orc")
         
-        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo (Ex: Kit 10 Trufas)")
+        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo (Ex: Kit 10 Trufas)", key="grupo_orc")
         
         st.write("---")
-        # Seleção de itens baseada na sua aba de ingredientes
-        c_it1, c_it2, c_it3, c_it4 = st.columns([3, 1, 1, 1])
-        item_escolhido = c_it1.selectbox("Selecione o Item (da Planilha):", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
-        qtd_orc = c_it2.number_input("Qtd", min_value=1, value=1)
-        frete_orc = c_it3.number_input("Frete/Unid (R$)", value=0.0)
-        emb_orc = c_it4.number_input("Emb/Unid (R$)", value=0.0)
+        c_it1, c_it2 = st.columns([3, 1])
+        item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
+        qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc")
         
         if st.button("➕ Adicionar Item ao Grupo"):
             if item_escolhido:
-                # Busca custo puro direto da planilha
-                preco_unit_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
+                p_unit_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
                 st.session_state.carrinho_orc.append({
                     "nome": item_escolhido,
                     "qtd": qtd_orc,
-                    "preco_puro": preco_unit_puro,
-                    "frete": frete_orc,
-                    "embalagem": emb_orc
+                    "preco_puro": p_unit_puro
                 })
                 st.rerun()
 
         if st.session_state.carrinho_orc:
-            total_custo_sem_lucro = 0.0
-            total_venda_grupo = 0.0
-            
             st.write(f"#### Itens de: {nome_grupo_pedido}")
+            total_custo_fabrica_orc = 0.0
+            total_venda_bruta_orc = 0.0
+
             cols_h = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
             cols_h[0].write("**Produto**")
             cols_h[1].write("**Qtd**")
             cols_h[2].write("**Unit. Puro**")
-            cols_h[3].write("**Unit. Final**")
-            cols_h[4].write("**Subtotal**")
+            cols_h[3].write("**Unit. Custo**")
+            cols_h[4].write("**Subtotal Venda**")
 
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 
-                # CÁLCULOS INTEGRADOS COM SUA LÓGICA
-                c_unit_base = it['preco_puro'] + it['frete'] + it['embalagem']
-                # Aplica Quebra(2%) e Despesas(30%)
-                c_prod = c_unit_base * (1 + (perc_quebra/100) + (perc_despesas/100))
-                # Aplica Margem de Lucro da tela
-                v_unit_final = c_prod * (1 + (margem_lucro/100))
-                sub_venda = v_unit_final * it['qtd']
+                # CÁLCULOS UNITÁRIOS (Sem Frete/Emb aqui, eles entram no final)
+                v_quebra_it = it['preco_puro'] * (perc_quebra / 100)
+                v_desp_it = it['preco_puro'] * (perc_despesas / 100)
                 
-                total_custo_sem_lucro += (it['preco_puro'] * it['qtd'])
-                total_venda_grupo += sub_venda
+                v_unit_custo_prod = it['preco_puro'] + v_quebra_it + v_desp_it
+                v_venda_unit = v_unit_custo_prod * (1 + (margem_lucro / 100))
+                sub_venda = v_venda_unit * it['qtd']
+                
+                total_custo_fabrica_orc += (it['preco_puro'] * it['qtd'])
+                total_venda_bruta_orc += sub_venda
                 
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
-                c[3].write(f"R$ {v_unit_final:.2f}")
+                c[3].write(f"R$ {v_unit_custo_prod:.2f}")
                 c[4].write(f"**R$ {sub_venda:.2f}**")
                 
                 if c[5].button("❌", key=f"del_orc_{idx}"):
@@ -288,18 +282,27 @@ def main():
                     st.rerun()
             
             st.divider()
-            # Taxa de cartão se for Crédito
-            v_taxa_fin_orc = total_venda_grupo * (taxa_credito_input/100) if forma_pagamento == "Crédito" else 0.0
-            total_geral_orc = total_venda_grupo + v_taxa_fin_orc
+            
+            # --- ADICIONAIS DO ORÇAMENTO (FINAL) ---
+            st.write("#### Adicionais do Pedido")
+            col_f1, col_f2 = st.columns(2)
+            frete_final = col_f1.number_input("Taxa de Frete Total (R$)", value=0.0)
+            emb_final = col_f2.number_input("Taxa de Embalagem Total (R$)", value=0.0)
+            
+            # Cálculo Final do Orçamento
+            v_venda_com_adicionais = total_venda_bruta_orc + frete_final + emb_final
+            v_taxa_cartao_orc = v_venda_com_adicionais * (taxa_credito_input/100) if forma_pagamento == "Crédito" else 0.0
+            total_geral_orc = v_venda_com_adicionais + v_taxa_cartao_orc
             
             res_c1, res_c2 = st.columns(2)
             with res_c1:
-                st.write(f"💵 Total Custo Puro de Fábrica: **R$ {total_custo_sem_lucro:.2f}**")
-                st.write(f"💳 Taxa Cartão: R$ {v_taxa_fin_orc:.2f}")
+                st.write(f"💵 Custo Puro Insumos: R$ {total_custo_fabrica_orc:.2f}")
+                st.write(f"📈 Margem Lucro: {margem_lucro}%")
+                if forma_pagamento == "Crédito":
+                    st.write(f"💳 Taxa Cartão: R$ {v_taxa_cartao_orc:.2f}")
             with res_c2:
-                st.markdown(f"### TOTAL FINAL: R$ {total_geral_orc:.2f}")
+                st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
                 
-            # Botões de ação
             b_col1, b_col2, b_col3 = st.columns(3)
             if b_col1.button("📱 WhatsApp", use_container_width=True):
                 texto = f"*ORÇAMENTO: {nome_cliente}*\n🎁 Grupo: {nome_grupo_pedido}\n"
@@ -313,15 +316,18 @@ def main():
                 df_hist = carregar_historico_orc()
                 novo = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
                 conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo], ignore_index=True))
-                st.success("Salvo!")
+                st.success("Salvo com sucesso!")
             
-            if b_col3.button("🗑️ Limpar", use_container_width=True):
+            if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
 
     with t2:
         df_salvos = carregar_historico_orc()
-        st.dataframe(df_salvos, use_container_width=True)
+        if not df_salvos.empty:
+            st.dataframe(df_salvos, use_container_width=True)
+        else:
+            st.info("Nenhum orçamento salvo.")
 
 if __name__ == "__main__":
     main()
