@@ -211,7 +211,6 @@ def main():
     st.divider()
     st.markdown("### 📋 Gerador de Orçamento")
     
-    # NOVOS CAMPOS: NOME, TELEFONE E DATA
     col_cli1, col_cli2, col_cli3 = st.columns([2, 1, 1])
     with col_cli1:
         nome_cliente = st.text_input("Nome do Cliente:", placeholder="Ex: João Silva")
@@ -226,6 +225,7 @@ def main():
     with col_orc1:
         prod_orc = st.text_input("Produto", value=receita_para_orc if receita_para_orc else nome_produto_final)
     with col_orc2:
+        # Preço Unitário continua sendo usado para o cálculo interno, mas não aparecerá na tabela final
         valor_padrao = preco_venda_final if prod_orc == nome_produto_final and preco_venda_final > 0 else 0.0
         p_unit_orc = st.number_input("Preço Unitário (R$)", min_value=0.0, value=valor_padrao, format="%.2f")
     with col_orc3:
@@ -243,14 +243,14 @@ def main():
             st.session_state.carrinho.append({
                 "Produto": prod_orc,
                 "Qtd": qtd_orc,
-                "Preço Unit.": p_unit_orc,
                 "Subtotal": subtotal_item
             })
             st.rerun()
 
     if st.session_state.carrinho:
         df_carrinho = pd.DataFrame(st.session_state.carrinho)
-        st.table(df_carrinho.style.format({"Preço Unit.": "R$ {:.2f}", "Subtotal": "R$ {:.2f}"}))
+        # Exibe apenas as colunas: Produto, Qtd e Subtotal
+        st.table(df_carrinho.style.format({"Subtotal": "R$ {:.2f}"}))
         
         total_geral_orc = df_carrinho["Subtotal"].sum()
         st.markdown(f"#### **Total: R$ {total_geral_orc:.2f}**")
@@ -258,7 +258,6 @@ def main():
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             if st.button("Gerar orçamento para whatsapp", use_container_width=True):
-                # TEXTO DO WHATSAPP ATUALIZADO COM OS DADOS DO CLIENTE
                 texto_whats = f"*ORÇAMENTO - {data_orcamento.strftime('%d/%m/%Y')}*\n"
                 if nome_cliente: texto_whats += f"Cliente: {nome_cliente}\n"
                 if tel_cliente: texto_whats += f"Tel: {tel_cliente}\n"
