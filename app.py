@@ -47,7 +47,7 @@ if "nome_prod" not in st.session_state:
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 
-# --- FUNÇÕES DE DADOS (Correção de WorksheetNotFound e Colunas) ---
+# --- FUNÇÕES DE DADOS ---
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=0)
@@ -104,6 +104,12 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
+# --- FUNÇÃO DE CALLBACK (Resolve o clique duplo) ---
+def adicionar_ao_carrinho(nome, qtd, df_ing):
+    if nome != "" and not df_ing.empty:
+        p_unit_puro = float(df_ing[df_ing['nome'] == nome]['preco'].iloc[0])
+        st.session_state.carrinho_orc.append({"nome": nome, "qtd": qtd, "preco_puro": p_unit_puro})
+
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
@@ -127,7 +133,7 @@ def main():
             if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod = receita_selecionada
-                st.session_state.n_itens_manual = len(dados_rec) # Garante que atualiza o seletor de itens
+                st.session_state.n_itens_manual = len(dados_rec)
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
@@ -150,37 +156,27 @@ def main():
     perc_quebra = 2 
     perc_despesas = 30
 
-    # ARRUUMADO: Layout e carregamento dos ingredientes inicial
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         lista_para_salvar = []
-        
-        # Garante que a lista de ingredientes seja carregada e não pule a exibição
-        if df_ing.empty:
-            st.warning("Carregando banco de dados de ingredientes...")
-            st.rerun()
-        else:
+        if not df_ing.empty:
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
-                
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
-                
                 with c2:
                     qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
                 with c3:
                     unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
-                
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
                 if unid_uso == "g" and u_base == "kg": fator = 1/1000
                 elif unid_uso == "kg" and u_base == "g": fator = 1000
                 elif unid_uso == "ml" and u_base == "l": fator = 1/1000
-                
                 custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
                 custo_ingredientes_total += custo_parcial
                 lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
@@ -241,11 +237,9 @@ def main():
         item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
         qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc")
         
-        if st.button("➕ Adicionar Item ao Grupo", use_container_width=True):
-            if item_escolhido != "" and not df_ing.empty:
-                p_unit_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
-                st.session_state.carrinho_orc.append({"nome": item_escolhido, "qtd": qtd_orc, "preco_puro": p_unit_puro})
-                st.rerun()
+        # CORREÇÃO: Usando on_click para resposta instantânea ao primeiro clique
+        st.button("➕ Adicionar Item ao Grupo", use_container_width=True, 
+                  on_click=adicionar_ao_carrinho, args=(item_escolhido, qtd_orc, df_ing))
 
         if st.session_state.carrinho_orc:
             total_venda_bruta_acumulada = 0.0
