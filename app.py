@@ -60,8 +60,10 @@ def carregar_ingredientes():
 def carregar_receitas_nuvem():
     try:
         df = conn.read(worksheet="Receitas", ttl=0)
-        if df is None or df.empty or 'nome_receita' not in df.columns:
+        if df is None or df.empty:
             return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
+        # Padroniza nomes de colunas
+        df.columns = [str(c).strip().lower() for c in df.columns]
         return df
     except Exception:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
@@ -99,7 +101,7 @@ def main():
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
 
-    # --- CONFIGURAÇÕES DO PRODUTO (VALORES GLOBAIS PARA TAXAS) ---
+    # --- CONFIGURAÇÕES DO PRODUTO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
@@ -127,16 +129,20 @@ def main():
                 if f"nome_{i}" in st.session_state and st.session_state[f"nome_{i}"] in lista_nomes:
                     idx_def = lista_nomes.index(st.session_state[f"nome_{i}"])
                 escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}", index=idx_def)
+            
+            # Cálculo de custo
             dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
             with c2:
                 qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
             with c3:
                 unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+            
             fator = 1.0
             u_base = str(dados_item['unidade']).lower().strip()
             if unid_uso == "g" and u_base == "kg": fator = 1/1000
             elif unid_uso == "kg" and u_base == "g": fator = 1000
             elif unid_uso == "ml" and u_base == "l": fator = 1/1000
+            
             custo_parcial = (float(qtd_usada) * fator) * float(dados_item['preco'])
             custo_ingredientes_total += custo_parcial
             lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
@@ -149,7 +155,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
-    # --- CÁLCULOS FINAIS ORIGINAIS ---
+    # --- CÁLCULOS FINAIS ---
     taxa_entrega_base = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
@@ -163,7 +169,7 @@ def main():
     cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
     cor_cmv = "#4ade80" if cmv_percentual <= 35 else "#facc15" if cmv_percentual <= 45 else "#f87171"
 
-    # --- TABELA DETALHADA ORIGINAL ---
+    # --- TABELA DETALHADA ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
@@ -194,7 +200,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    # --- ABA DE ORÇAMENTO (COM BOTÕES DE FRETE E EMBALAGEM) ---
+    # --- ABA DE ORÇAMENTO (SISTEMA DE BUSCA NA PLANILHA) ---
     st.divider()
     st.header("📋 Gerador de Orçamento")
     
@@ -205,62 +211,69 @@ def main():
 
     col_sel, col_qtd, col_frete, col_emb, col_btn = st.columns([2.5, 0.8, 1, 1, 1])
     with col_sel:
-        item_selecionado = st.selectbox("Escolha uma Receita Salva:", [""] + receitas_nomes, key="sel_orc")
+        receita_orc = st.selectbox("Escolha a Receita Salva:", [""] + receitas_nomes, key="sel_orc")
     with col_qtd:
-        qtd_item = st.number_input("Qtd", min_value=1, value=1, key="qtd_orc")
+        qtd_orc = st.number_input("Quantidade", min_value=1, value=1, key="qtd_orc_val")
     with col_frete:
-        valor_frete_orc = st.number_input("Frete (R$)", min_value=0.0, value=0.0, step=1.0)
+        frete_orc = st.number_input("Taxa Entrega (R$)", min_value=0.0, value=0.0)
     with col_emb:
-        valor_emb_orc = st.number_input("Emb. (R$)", min_value=0.0, value=0.0, step=1.0)
+        emb_extra = st.number_input("Emb. Extra (R$)", min_value=0.0, value=0.0)
     
     with col_btn:
         st.write("")
-        if st.button("➕ Adicionar"):
-            if item_selecionado:
-                # BUSCA A RECEITA E CALCULA O VALOR COM AS TAXAS ATUAIS
-                dados_da_receita = df_rec[df_rec['nome_receita'] == item_selecionado]
-                custo_ing_orc = 0.0
-                for r in dados_da_receita.itertuples():
-                    ing_info = df_ing[df_ing['nome'] == r.ingrediente].iloc[0]
-                    f = 1.0
-                    u_b = str(ing_info['unidade']).lower().strip()
-                    u_r = str(r.unid).lower().strip()
-                    if u_r == "g" and u_b == "kg": f = 1/1000
-                    elif u_r == "kg" and u_b == "g": f = 1000
-                    elif u_r == "ml" and u_b == "l": f = 1/1000
-                    custo_ing_orc += (float(r.qtd) * f) * float(ing_info['preco'])
+        if st.button("➕ Adicionar", use_container_width=True):
+            if receita_orc:
+                # 1. Busca ingredientes específicos dessa receita na planilha
+                ing_da_receita = df_rec[df_rec['nome_receita'] == receita_orc]
                 
-                # APLICA AS TAXAS GLOBAIS DEFINIDAS NA TELA
-                v_q = custo_ing_orc * (perc_quebra / 100)
-                v_d = custo_ing_orc * (perc_despesas / 100)
-                # Soma a embalagem do orçamento + a quebra + ingredientes
-                v_c = custo_ing_orc + v_q + valor_emb_orc
-                c_total = v_c + v_d
-                lucro_v = c_total * (margem_lucro / 100)
-                p_venda_base = c_total + lucro_v
-                v_taxa_f = (p_venda_base + valor_frete_orc) * t_percentual
-                p_final_unitario = p_venda_base + valor_frete_orc + v_taxa_f
+                custo_base_orc = 0.0
+                for r in ing_da_receita.itertuples():
+                    # Puxa o preço atual do ingrediente da aba 'Ingredientes'
+                    match_ing = df_ing[df_ing['nome'] == r.ingrediente]
+                    if not match_ing.empty:
+                        pre_ing = float(match_ing.iloc[0]['preco'])
+                        u_b = str(match_ing.iloc[0]['unidade']).lower().strip()
+                        u_r = str(r.unid).lower().strip()
+                        
+                        f = 1.0
+                        if u_r == "g" and u_b == "kg": f = 1/1000
+                        elif u_r == "kg" and u_b == "g": f = 1000
+                        elif u_r == "ml" and u_b == "l": f = 1/1000
+                        
+                        custo_base_orc += (float(r.qtd) * f) * pre_ing
+                
+                # 2. Aplica as taxas configuradas no momento
+                v_q_orc = custo_base_orc * (perc_quebra / 100)
+                v_d_orc = custo_base_orc * (perc_despesas / 100)
+                # Soma embalagem padrão da receita + embalagem extra do orçamento
+                c_prod_orc = custo_base_orc + v_q_orc + v_d_orc + valor_embalagem + emb_extra
+                lucro_orc = c_prod_orc * (margem_lucro / 100)
+                
+                # Preço final unitário com frete e taxas financeiras
+                p_venda_orc = c_prod_orc + lucro_orc + frete_orc
+                taxa_fin_orc = p_venda_orc * t_percentual
+                valor_final_item = p_venda_orc + taxa_fin_orc
 
                 st.session_state.carrinho.append({
-                    "Produto": item_selecionado, 
-                    "Qtd": qtd_item, 
-                    "Preço Unit.": p_final_unitario, 
-                    "Subtotal": p_final_unitario * qtd_item
+                    "Produto": receita_orc, 
+                    "Qtd": qtd_orc, 
+                    "Preço Unit.": valor_final_item, 
+                    "Subtotal": valor_final_item * qtd_orc
                 })
                 st.rerun()
 
     if st.session_state.carrinho:
         df_c = pd.DataFrame(st.session_state.carrinho)
         st.table(df_c.style.format({"Preço Unit.": "R$ {:.2f}", "Subtotal": "R$ {:.2f}"}))
-        total_geral = df_c["Subtotal"].sum()
-        st.markdown(f"## **Total Geral: R$ {total_geral:.2f}**")
+        total_pedido = df_c["Subtotal"].sum()
+        st.markdown(f"## **Total do Pedido: R$ {total_pedido:.2f}**")
         
         c_z1, c_z2 = st.columns(2)
         with c_z1:
             if st.button("📲 Gerar WhatsApp", use_container_width=True):
-                lista = "".join([f"• {i['Produto']} ({i['Qtd']}x): R$ {i['Subtotal']:.2f}\n" for i in st.session_state.carrinho])
-                zap = f"*ORÇAMENTO - {data_orcamento.strftime('%d/%m/%Y')}*\n👤 *Cliente:* {nome_cliente}\n--------------------------\n{lista}--------------------------\n💰 *TOTAL: R$ {total_geral:.2f}*"
-                st.code(zap, language="text")
+                lista_itens = "".join([f"• {i['Produto']} ({i['Qtd']}x): R$ {i['Subtotal']:.2f}\n" for i in st.session_state.carrinho])
+                texto = f"*ORÇAMENTO - {data_orcamento.strftime('%d/%m/%Y')}*\n👤 *Cliente:* {nome_cliente}\n--------------------------\n{lista_itens}--------------------------\n💰 *TOTAL: R$ {total_pedido:.2f}*"
+                st.code(texto, language="text")
         with c_z2:
             if st.button("🗑️ Limpar", use_container_width=True):
                 st.session_state.carrinho = []; st.rerun()
