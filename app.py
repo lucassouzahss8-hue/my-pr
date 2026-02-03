@@ -214,7 +214,6 @@ def main():
         
         st.divider()
         st.subheader("Inserir Itens no Pedido")
-        # ADICIONADO: Campo Nome do Produto e Seletor de Ingredientes
         co1, co2 = st.columns([1, 1])
         nome_produto_orc = co1.text_input("Nome do Produto no Orçamento", placeholder="Ex: Bolo de Chocolate")
         item_planilha_sel = co2.selectbox("Selecione o Item da Aba Ingredientes:", [""] + df_ing['nome'].tolist())
@@ -258,7 +257,9 @@ def main():
 
             b1, b2, b3 = st.columns(3)
             if b1.button("📱 Gerar Texto WhatsApp", use_container_width=True):
-                texto = f"*ORÇAMENTO - {data_orc_input.strftime('%d/%m/%Y')}*\n"
+                # DATA FORMATADA PARA BRASIL (DIA/MES/ANO)
+                data_br = data_orc_input.strftime('%d/%m/%Y')
+                texto = f"*ORÇAMENTO - {data_br}*\n"
                 texto += f"Cliente: {nome_cliente}\n"
                 texto += "-"*25 + "\n"
                 for i in st.session_state.carrinho_orc:
@@ -267,7 +268,12 @@ def main():
                 st.code(texto, language="text")
 
             if b2.button("💾 Salvar este Orçamento", use_container_width=True):
-                df_save = pd.DataFrame([{"Data": data_orc_input, "Cliente": nome_cliente, "Total": total_final_orc}])
+                # SALVANDO A DATA FORMATADA COMO STRING PARA FACILITAR LEITURA NA PLANILHA
+                df_save = pd.DataFrame([{
+                    "Data": data_orc_input.strftime('%d/%m/%Y'), 
+                    "Cliente": nome_cliente, 
+                    "Total": f"R$ {total_final_orc:.2f}"
+                }])
                 historico = carregar_orcamentos_salvos()
                 novo_historico = pd.concat([historico, df_save], ignore_index=True)
                 conn.update(worksheet="Orcamentos_Salvos", data=novo_historico)
