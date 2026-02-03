@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import date
 
 # 1. Configuração da Página
 st.set_page_config(
@@ -11,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilização CSS Original
+# 2. Estilização CSS
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -71,7 +70,7 @@ def main():
 
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
-    # --- SIDEBAR ORIGINAL ---
+    # --- SIDEBAR: AJUSTE DE TAXAS ---
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
         taxa_credito_input = st.number_input("Taxa Crédito (%)", value=4.99, step=0.01)
@@ -79,7 +78,7 @@ def main():
         km_gratis = st.number_input("KM Isentos", value=5)
         valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
 
-    # --- ABA DE SELEÇÃO DE RECEITA ORIGINAL ---
+    # --- GERENCIAR RECEITAS ---
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
         col_rec1, col_rec2 = st.columns([3, 1])
@@ -97,11 +96,12 @@ def main():
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
 
-    # --- CONFIGURAÇÕES DO PRODUTO (LAYOUT ORIGINAL) ---
+    # --- CONFIGURAÇÕES DO PRODUTO ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
     with col_p2:
+        # MARGEM FIXA EM 135%
         margem_lucro = st.number_input("Margem de Lucro (%)", min_value=0, value=135)
     with col_p3:
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
@@ -151,31 +151,39 @@ def main():
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
+        # QUEBRA FIXA EM 2%
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
-    # --- CÁLCULOS TÉCNICOS ---
-    taxa_entrega_calc = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+    # --- CÁLCULOS FINAIS ---
+    taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
+    
     v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem
     custo_total_prod = v_cmv + v_despesas
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_venda_produto = custo_total_prod + lucro_valor
+    
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-    v_taxa_financeira = (preco_venda_produto + taxa_entrega_calc) * t_percentual
-    preco_venda_final = preco_venda_produto + taxa_entrega_calc + v_taxa_financeira
-    cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
+    v_taxa_financeira = (preco_venda_produto + taxa_entrega) * t_percentual
+    preco_venda_final = preco_venda_produto + taxa_entrega + v_taxa_financeira
 
-    # --- TABELA DE DETALHAMENTO ORIGINAL (RESTAURADA) ---
+    cmv_percentual = (v_cmv / preco_venda_produto * 100) if preco_venda_produto > 0 else 0
+    
+    if cmv_percentual <= 35: cor_cmv = "#4ade80"
+    elif cmv_percentual <= 45: cor_cmv = "#facc15"
+    else: cor_cmv = "#f87171"
+
+    # --- TABELA DETALHADA ---
     st.divider()
     res1, res2 = st.columns([1.5, 1])
     with res1:
-        st.markdown(f"### Detalhamento: {nome_produto_final}")
+        st.markdown(f"### Detalhamento: {nome_produto_final if nome_produto_final else 'Novo Produto'}")
         df_resumo = pd.DataFrame({
             "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Custo Produção", "CMV (%)", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_calc:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Valor": [f"R$ {custo_ingredientes_total:.2f}", f"R$ {v_quebra:.2f}", f"R$ {v_despesas:.2f}", f"R$ {valor_embalagem:.2f}", f"R$ {custo_total_prod:.2f}", f"{cmv_percentual:.1f}%", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         
@@ -191,58 +199,14 @@ def main():
         st.markdown(f"""
         <div class='resultado-box'>
             <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
+            <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
             <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
-            <p>Lucro Líquido: R$ {lucro_valor:.2f}</p>
+            <hr style='border-color: #4b5563;'>
+            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
+            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
+            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
         </div>
         """, unsafe_allow_html=True)
-
-    # --- NOVA SEÇÃO: ORÇAMENTO (ABA ADICIONAL) ---
-    st.divider()
-    st.subheader("📝 Orçamento")
-    with st.container():
-        c_orc1, c_orc2, c_orc3 = st.columns(3)
-        with c_orc1:
-            nome_cliente = st.text_input("Nome do Cliente")
-        with c_orc2:
-            tel_cliente = st.text_input("Telefone")
-        with c_orc3:
-            data_orc = st.date_input("Data do Orçamento", value=date.today())
-        
-        # O valor unitário já vem preenchido com o preco_venda_final calculado acima
-        col_item1, col_item2, col_item3 = st.columns([2, 1, 1])
-        with col_item1:
-            prod_nome = st.text_input("Produto no Orçamento", value=nome_produto_final)
-        with col_item2:
-            v_unit = st.number_input("Valor Unitário (R$)", value=preco_venda_final)
-        with col_item3:
-            qtd = st.number_input("Quantidade", min_value=1, value=1)
-            
-        col_extra1, col_extra2 = st.columns(2)
-        with col_extra1:
-            # Campo solicitado para taxa de entrega
-            frete = st.number_input("Taxa de Entrega (R$)", value=0.0)
-        with col_extra2:
-            sacola = st.number_input("Embalagem Externa (R$)", value=0.0)
-            
-        total_orc = (v_unit * qtd) + frete + sacola
-        st.markdown(f"### Total do Orçamento: R$ {total_orc:.2f}")
-        
-        if st.button("Gerar orçamento para whatsapp"):
-            resumo = f"""
-📋 *ORÇAMENTO*
-📅 Data: {data_orc.strftime('%d/%m/%Y')}
-👤 Cliente: {nome_cliente}
-📞 Tel: {tel_cliente}
---------------------------
-🍰 Produto: {prod_nome}
-🔢 Quantidade: {qtd}
-💰 Valor Unit.: R$ {v_unit:.2f}
-🚚 Taxa de Entrega: R$ {frete:.2f}
-🛍️ Emb. Externa: R$ {sacola:.2f}
---------------------------
-✅ *TOTAL: R$ {total_orc:.2f}*
-"""
-            st.code(resumo, language="text")
 
 if __name__ == "__main__":
     main()
