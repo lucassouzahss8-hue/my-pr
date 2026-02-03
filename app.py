@@ -106,10 +106,6 @@ def exportar_pdf(cliente, pedido, itens, total):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def main():
-    # Garante que o carrinho não seja resetado por interferência de widgets
-    if "carrinho_orc" not in st.session_state:
-        st.session_state.carrinho_orc = []
-
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
 
@@ -151,8 +147,9 @@ def main():
         
     st.divider()
 
+    # --- RESOLUÇÃO DO ERRO: Não trava o app com return ---
     if df_ing.empty:
-        st.warning("⚠️ Aguardando carregamento ou adicione ingredientes na aba 'Ingredientes' da sua planilha.")
+        st.warning("⚠️ Carregando ingredientes da planilha... Aguarde um instante.")
     
     custo_ingredientes_total = 0.0
     perc_quebra = 2 
@@ -250,10 +247,8 @@ def main():
         qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc")
         
         if st.button("➕ Adicionar Item ao Grupo", use_container_width=True):
-            if item_escolhido != "":
-                # Captura os dados do item antes do rerun
+            if item_escolhido != "" and not df_ing.empty:
                 p_unit_puro = float(df_ing[df_ing['nome'] == item_escolhido]['preco'].iloc[0])
-                # Adiciona à lista de forma segura
                 st.session_state.carrinho_orc.append({"nome": item_escolhido, "qtd": qtd_orc, "preco_puro": p_unit_puro})
                 st.rerun()
 
@@ -279,8 +274,7 @@ def main():
                 c[3].write(f"R$ {v_unit_custo_exibicao:.2f}")
                 c[4].write(f"**R$ {v_venda_it:.2f}**")
                 if c[5].button("❌", key=f"del_orc_{idx}"):
-                    st.session_state.carrinho_orc.pop(idx)
-                    st.rerun()
+                    st.session_state.carrinho_orc.pop(idx); st.rerun()
             
             st.divider()
             f1, f2 = st.columns(2)
@@ -293,7 +287,6 @@ def main():
             
             st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
             st.write(f"💳 Taxa Cartão ({taxa_credito_input}%): R$ {v_taxa_cartao_orc:.2f}")
-            st.info(f"💰 **Lucro Líquido:** R$ {total_lucro_acumulado:.2f}  |  📈 **Margem aplicada:** {margem_lucro}%")
             
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
