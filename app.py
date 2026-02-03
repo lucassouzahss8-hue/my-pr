@@ -43,8 +43,8 @@ if "n_itens" not in st.session_state:
     st.session_state.n_itens = 1
 if "nome_prod" not in st.session_state:
     st.session_state.nome_prod = ""
-if "carrinho_vendas" not in st.session_state:
-    st.session_state.carrinho_vendas = []
+if "itens_orcamento" not in st.session_state:
+    st.session_state.itens_orcamento = []
 
 # --- FUNÇÕES DE DADOS ---
 def carregar_ingredientes():
@@ -150,7 +150,7 @@ def main():
         valor_embalagem = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0)
 
     # --- CÁLCULOS FINAIS ---
-    taxa_entrega_base = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
+    taxa_entrega_calculada = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
     v_cmv = custo_ingredientes_total + v_quebra + valor_embalagem
@@ -158,8 +158,8 @@ def main():
     lucro_valor = custo_total_prod * (margem_lucro / 100)
     preco_venda_produto = custo_total_prod + lucro_valor
     t_percentual = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-    v_taxa_financeira = (preco_venda_produto + taxa_entrega_base) * t_percentual
-    preco_venda_final = preco_venda_produto + taxa_entrega_base + v_taxa_financeira
+    v_taxa_financeira = (preco_venda_produto + taxa_entrega_calculada) * t_percentual
+    preco_venda_final = preco_venda_produto + taxa_entrega_calculada + v_taxa_financeira
 
     # --- TABELA E RESULTADO ---
     st.divider()
@@ -168,7 +168,7 @@ def main():
         st.markdown(f"### Detalhamento")
         df_resumo = pd.DataFrame({
             "Item": ["Custo Produção", "Lucro", "Entrega", "Taxas", "TOTAL FINAL"],
-            "Valor": [f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_base:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
+            "Valor": [f"R$ {custo_total_prod:.2f}", f"R$ {lucro_valor:.2f}", f"R$ {taxa_entrega_calculada:.2f}", f"R$ {v_taxa_financeira:.2f}", f"R$ {preco_venda_final:.2f}"]
         })
         st.table(df_resumo)
         if st.button("💾 Salvar Receita", use_container_width=True):
@@ -181,41 +181,52 @@ def main():
     with res2:
         st.markdown(f"<div class='resultado-box'><h2>VALOR SUGERIDO</h2><h1 style='color:#60a5fa!important;'>R$ {preco_venda_final:.2f}</h1></div>", unsafe_allow_html=True)
 
-    # --- NOVA SEÇÃO: ORÇAMENTO (SOMA DE VÁRIAS RECEITAS) ---
+    # --- SEÇÃO ADICIONADA: SELECIONE RECEITA PARA ORÇAMENTO ---
     st.divider()
-    st.header("📝 Orçamento Multi-Receitas")
+    st.header("📋 Gerar Orçamento (Múltiplas Receitas)")
     
-    col_o1, col_o2 = st.columns(2)
-    with col_o1: nome_cli = st.text_input("Cliente", key="orc_cli")
-    with col_o2: data_orc = st.date_input("Data", value=date.today())
+    with st.container():
+        c_cli, c_data = st.columns(2)
+        with c_cli: cliente = st.text_input("Nome do Cliente", key="cli_nome")
+        with c_data: data_orc = st.date_input("Data", value=date.today())
 
-    # Botão para adicionar a receita ATUAL calculada acima ao orçamento
-    if st.button(f"➕ Adicionar '{nome_produto_final}' ao Orçamento"):
-        if nome_produto_final:
-            st.session_state.carrinho_vendas.append({
-                "Produto": nome_produto_final,
-                "Preço": preco_venda_final
-            })
-            st.success(f"{nome_produto_final} adicionado!")
-        else:
-            st.error("Dê um nome ao produto primeiro!")
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            # Seleciona a receita diretamente do banco de dados
+            receita_orc = st.selectbox("Selecione a Receita para o Orçamento:", [""] + receitas_nomes, key="sel_orc_final")
+        with col2:
+            # O valor unitário é o que está sendo calculado na tela no momento
+            valor_unitario = preco_venda_final if receita_orc == nome_produto_final else 0.0
+            st.write(f"Valor: R$ {valor_unitario:.2f}")
+        with col3:
+            qtd_orc = st.number_input("Qtd", min_value=1, value=1)
 
-    if st.session_state.carrinho_vendas:
-        st.subheader("Itens do Orçamento")
-        df_carrinho = pd.DataFrame(st.session_state.carrinho_vendas)
-        st.table(df_carrinho.style.format({"Preço": "R$ {:.2f}"}))
+        if st.button("➕ Adicionar ao Orçamento"):
+            if receita_orc:
+                st.session_state.itens_orcamento.append({
+                    "Produto": receita_orc,
+                    "Qtd": qtd_orc,
+                    "Preço Unit.": valor_unitario,
+                    "Subtotal": valor_unitario * qtd_orc
+                })
+                st.rerun()
+
+    if st.session_state.itens_orcamento:
+        st.subheader("Resumo do Pedido")
+        df_orc = pd.DataFrame(st.session_state.itens_orcamento)
+        st.table(df_orc.style.format({"Preço Unit.": "R$ {:.2f}", "Subtotal": "R$ {:.2f}"}))
         
-        total_orc = df_carrinho["Preço"].sum()
-        st.markdown(f"### **Total: R$ {total_orc:.2f}**")
-        
-        if st.button("🗑️ Limpar Tudo"):
-            st.session_state.carrinho_vendas = []
+        total_pedido = df_orc["Subtotal"].sum()
+        st.markdown(f"## **Total Geral: R$ {total_pedido:.2f}**")
+
+        if st.button("🗑️ Limpar Orçamento"):
+            st.session_state.itens_orcamento = []
             st.rerun()
 
-        if st.button("📲 Gerar WhatsApp"):
-            itens_txt = "\n".join([f"• {i['Produto']}: R$ {i['Preço']:.2f}" for i in st.session_state.carrinho_vendas])
-            zap_msg = f"*ORÇAMENTO - {nome_cli}*\n{data_orc.strftime('%d/%m/%Y')}\n\n{itens_txt}\n\n*TOTAL: R$ {total_orc:.2f}*"
-            st.code(zap_msg)
+        if st.button("📲 Gerar Texto WhatsApp"):
+            itens_zap = "\n".join([f"• {i['Produto']} ({i['Qtd']}x): R$ {i['Subtotal']:.2f}" for i in st.session_state.itens_orcamento])
+            txt = f"*ORÇAMENTO - {cliente}*\nData: {data_orc.strftime('%d/%m/%Y')}\n\n{itens_zap}\n\n*TOTAL: R$ {total_pedido:.2f}*"
+            st.code(txt)
 
 if __name__ == "__main__":
     main()
