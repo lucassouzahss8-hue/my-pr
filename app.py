@@ -71,7 +71,6 @@ def carregar_historico_orc():
     try:
         df = conn.read(worksheet="Orcamentos_Salvos", ttl=0)
         if df is not None:
-            # Resolve o problema da coluna aparecer como "None" ou com nomes diferentes
             df.columns = [c.replace(" ", "_") for c in df.columns]
             return df
         return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
@@ -128,7 +127,7 @@ def main():
             if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod = receita_selecionada
-                st.session_state.n_itens = len(dados_rec)
+                st.session_state.n_itens_manual = len(dados_rec) # Garante que atualiza o seletor de itens
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
@@ -151,28 +150,37 @@ def main():
     perc_quebra = 2 
     perc_despesas = 30
 
-    # Layout original mantido
+    # ARRUUMADO: Layout e carregamento dos ingredientes inicial
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         lista_para_salvar = []
-        if not df_ing.empty:
+        
+        # Garante que a lista de ingredientes seja carregada e não pule a exibição
+        if df_ing.empty:
+            st.warning("Carregando banco de dados de ingredientes...")
+            st.rerun()
+        else:
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
+                
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
+                
                 with c2:
                     qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
                 with c3:
                     unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+                
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
                 if unid_uso == "g" and u_base == "kg": fator = 1/1000
                 elif unid_uso == "kg" and u_base == "g": fator = 1000
                 elif unid_uso == "ml" and u_base == "l": fator = 1/1000
+                
                 custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
                 custo_ingredientes_total += custo_parcial
                 lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
@@ -276,7 +284,6 @@ def main():
                 conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
                 st.success("Orçamento salvo!")
 
-            # RESOLUÇÃO DEFINITIVA DO ERRO DE LIMPAR: Limpa o carrinho e recarrega a página para resetar os campos
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
@@ -289,7 +296,6 @@ def main():
                 c1.write(row.get('Data', ''))
                 c2.write(row.get('Cliente', ''))
                 c3.write(row.get('Pedido', ''))
-                # Mostra o valor de qualquer coluna que comece com "Valor" para evitar o "None"
                 valor_exibir = row.get('Valor_Final', row.get('Valor_Final', ''))
                 c4.write(valor_exibir)
                 if c5.button("🗑️", key=f"del_h_{i}"):
