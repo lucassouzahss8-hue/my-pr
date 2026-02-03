@@ -106,7 +106,7 @@ def main():
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
 
-    # --- CONFIGURAÇÕES DO PRODUTO ---
+    # --- CONFIGURAÇÕES DO PRODUTO (PRECIFICADOR) ---
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
         nome_produto_final = st.text_input("Nome do Produto Final:", key="nome_prod")
@@ -222,54 +222,51 @@ def main():
         nome_produto_grupo = st.text_input("📌 Nome do Produto (Grupo)", placeholder="Ex: Kit Festa Especial")
 
         st.divider()
-        co1, co2, co3, co4 = st.columns([2, 1, 1, 1])
+        # Removidos os botões manuais de frete e embalagem, usando agora as taxas globais
+        co1, co2 = st.columns([3, 1])
         item_sel = co1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_item_orc")
         qtd_orc = co2.number_input("Qtd", min_value=1, value=1, key="qtd_item_orc")
-        taxa_f_orc = co3.number_input("Frete Unit. (R$)", min_value=0.0, value=0.0)
-        taxa_e_orc = co4.number_input("Emb. Unit. (R$)", min_value=0.0, value=0.0)
 
         if st.button("➕ Adicionar ao Grupo"):
             if item_sel != "" and nome_produto_grupo != "":
                 filtro = df_ing[df_ing['nome'] == item_sel]
                 if not filtro.empty:
                     p_unit_ing = float(filtro['preco'].iloc[0])
+                    # Calcula o custo unitário já com as taxas de quebra e despesas do precificador
                     v_quebra_item = p_unit_ing * (perc_quebra / 100)
                     v_desp_item = p_unit_ing * (perc_despesas / 100)
-                    custo_total_item = p_unit_ing + v_quebra_item + v_desp_item + taxa_e_orc
+                    custo_total_unitario = p_unit_ing + v_quebra_item + v_desp_item
                     
                     st.session_state.carrinho_orc.append({
                         "Item": item_sel, 
                         "Qtd": qtd_orc, 
-                        "Custo_Total_Unit": custo_total_item,
-                        "Frete_Manual": taxa_f_orc
+                        "Custo_Total_Unit": custo_total_unitario
                     })
                     st.rerun()
 
         if st.session_state.carrinho_orc:
             st.markdown(f"### 📦 {nome_produto_grupo}")
             total_custo_grupo = 0.0
-            total_frete_manual = 0.0
 
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 cols = st.columns([4, 1, 2, 0.5])
-                sub_custo = it['Custo_Total_Unit'] * it['Qtd']
+                # Correção do erro KeyError garantindo que as chaves existem
+                sub_custo = it.get('Custo_Total_Unit', 0.0) * it.get('Qtd', 1)
                 total_custo_grupo += sub_custo
-                total_frete_manual += (it['Frete_Manual'] * it['Qtd'])
                 
-                cols[0].write(f"🔹 {it['Item']}")
-                cols[1].write(f"x{it['Qtd']}")
-                cols[2].write(f"R$ {sub_custo:.2f}")
+                cols[0].write(f"🔹 {it.get('Item', 'Sem Nome')}")
+                cols[1].write(f"x{it.get('Qtd', 0)}")
+                cols[2].write(f"Custo base: R$ {sub_custo:.2f}")
                 if cols[3].button("❌", key=f"del_orc_{idx}"):
                     st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
             
-            # Cálculo final usando as taxas do precificador (sem exibir detalhes extras)
+            # Cálculo final automático baseado nas taxas da Sidebar e Precificador
             preco_venda_itens = total_custo_grupo * (1 + (margem_orc / 100))
             taxa_entrega_orc = (dist_orc - km_gratis) * valor_por_km if dist_orc > km_gratis else 0.0
-            total_frete_geral = total_frete_manual + taxa_entrega_orc
             t_perc_orc = (taxa_credito_input / 100) if pag_orc == "Crédito" else 0.0
-            taxa_fin_orc = (preco_venda_itens + total_frete_geral) * t_perc_orc
-            total_final_orc = preco_venda_itens + total_frete_geral + taxa_fin_orc
+            taxa_fin_orc = (preco_venda_itens + taxa_entrega_orc) * t_perc_orc
+            total_final_orc = preco_venda_itens + taxa_entrega_orc + taxa_fin_orc
 
             st.markdown(f"## **TOTAL FINAL: R$ {total_final_orc:.2f}**")
 
