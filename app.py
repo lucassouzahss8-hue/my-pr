@@ -123,9 +123,8 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Mantendo n_itens no session state para não perder ao recarregar
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual", value=st.session_state.n_itens)
-        st.session_state.n_itens = n_itens_input # Atualiza o estado
+        st.session_state.n_itens = n_itens_input
         
         custo_ingredientes_total = 0.0
         lista_para_salvar = []
@@ -211,7 +210,7 @@ def main():
         tel_cliente = c_cli2.text_input("Telefone", placeholder="(00) 00000-0000")
         data_orc_input = c_cli3.date_input("Data do Orçamento", value=date.today())
         
-        nome_produto_grupo = st.text_input("📌 Nome do Pedido", placeholder="Ex: Kit Trufas de Frutas")
+        nome_produto_grupo = st.text_input("📌 Nome do Pedido", placeholder="Ex: Kit Doces de Luxo")
 
         st.divider()
         co1, co2, co3, co4 = st.columns([3, 1, 1, 1])
@@ -224,14 +223,15 @@ def main():
             if item_sel != "" and nome_produto_grupo != "":
                 filtro = df_ing[df_ing['nome'] == item_sel]
                 if not filtro.empty:
-                    p_unit_base = float(filtro['preco'].iloc[0])
-                    # Calcula custo base com quebra e despesas do precificador
-                    c_total_unit = p_unit_base + (p_unit_base * (perc_quebra/100)) + (p_unit_base * (perc_despesas/100)) + f_orc + e_orc
+                    p_base_cru = float(filtro['preco'].iloc[0])
+                    # Custo com adicionais da sidebar (Quebra e Despesas)
+                    c_com_adicionais = p_base_cru + (p_base_cru * (perc_quebra/100)) + (p_base_cru * (perc_despesas/100)) + f_orc + e_orc
                     
                     st.session_state.carrinho_orc.append({
                         "Item": item_sel, 
                         "Qtd": qtd_orc, 
-                        "Custo_Unit": c_total_unit,
+                        "Custo_Cru": p_base_cru, # Custo real sem nada
+                        "Custo_Prod": c_com_adicionais, # Custo com quebra/frete/emb
                         "Frete": f_orc,
                         "Emb": e_orc
                     })
@@ -241,50 +241,71 @@ def main():
             st.markdown(f"### 📦 {nome_produto_grupo}")
             total_venda_acumulado = 0.0
 
+            # Cabeçalho da Lista
+            h1, h2, h3, h4, h5, h6 = st.columns([3, 1, 1, 1, 2, 0.5])
+            h1.write("**Item**")
+            h2.write("**Qtd**")
+            h3.write("**Custo (u)**")
+            h4.write("**Venda (u)**")
+            h5.write("**Subtotal**")
+
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 cols = st.columns([3, 1, 1, 1, 2, 0.5])
                 q = it.get('Qtd', 1)
-                c_u = it.get('Custo_Unit', 0.0)
+                c_cru = it.get('Custo_Cru', 0.0) # Preço "puro"
+                c_prod = it.get('Custo_Prod', 0.0) # Custo com extras
                 
-                # VALOR DE VENDA (Custo + Margem)
-                venda_unitario = c_u * (1 + (margem_lucro_input / 100))
+                # VALOR DE VENDA (Custo Produção + Margem)
+                venda_unitario = c_prod * (1 + (margem_lucro_input / 100))
                 subtotal_venda = venda_unitario * q
                 total_venda_acumulado += subtotal_venda
                 
-                cols[0].write(f"🔹 {it.get('Item', 'Sem Nome')}")
+                cols[0].write(f"🔹 {it.get('Item')}")
                 cols[1].write(f"x{q}")
-                cols[2].write(f"F: R${it.get('Frete', 0.0):.2f}")
-                cols[3].write(f"E: R${it.get('Emb', 0.0):.2f}")
-                cols[4].write(f"**Venda: R$ {subtotal_venda:.2f}**")
+                cols[2].write(f"R$ {c_cru:.2f}") # MOSTRA O CUSTO REAL SEM ACRÉSCIMOS
+                cols[3].write(f"R$ {venda_unitario:.2f}")
+                cols[4].write(f"**R$ {subtotal_venda:.2f}**")
                 
                 if cols[5].button("❌", key=f"del_orc_{idx}"):
                     st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
             
-            # Cálculo final do Orçamento (Entrega + Taxas Financeiras)
+            # --- TOTAIS FINAIS DO ORÇAMENTO ---
+            st.divider()
             v_entrega_final = (distancia_km_input - km_gratis) * valor_por_km if distancia_km_input > km_gratis else 0.0
-            taxa_fin_final = (total_venda_acumulado + v_entrega_final) * t_percentual
-            total_geral_orc = total_venda_acumulado + v_entrega_final + taxa_fin_final
+            
+            # Cálculo da Taxa de Crédito (Soma se for Crédito)
+            valor_base_para_taxa = total_venda_acumulado + v_entrega_final
+            v_taxa_cartao = valor_base_para_taxa * (taxa_credito_input / 100) if forma_pagamento_input == "Crédito" else 0.0
+            
+            total_geral_orc = valor_base_para_taxa + v_taxa_cartao
 
-            st.markdown(f"## **TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}**")
+            col_fin1, col_fin2 = st.columns([2, 1])
+            with col_fin2:
+                st.write(f"Soma Itens: R$ {total_venda_acumulado:.2f}")
+                st.write(f"Entrega: R$ {v_entrega_final:.2f}")
+                if forma_pagamento_input == "Crédito":
+                    st.write(f"Taxa Crédito ({taxa_credito_input}%): R$ {v_taxa_cartao:.2f}")
+                st.markdown(f"### **TOTAL: R$ {total_geral_orc:.2f}**")
 
             b1, b2, b3 = st.columns(3)
             if b1.button("📱 Texto WhatsApp", use_container_width=True):
                 msg = (
-                    f"✨ *ORÇAMENTO PERSONALIZADO* ✨\n\n"
-                    f"📅 *Data:* {data_orc_input.strftime('%d/%m/%Y')}\n"
+                    f"✨ *PROPOSTA COMERCIAL* ✨\n\n"
                     f"👤 *Cliente:* {nome_cliente}\n"
-                    f"🎁 *Pedido:* {nome_produto_grupo}\n\n"
-                    f"--- *ITENS SOLICITADOS* ---\n"
+                    f"🎁 *Pedido:* {nome_produto_grupo}\n"
+                    f"📅 *Data:* {data_orc_input.strftime('%d/%m/%Y')}\n\n"
+                    f"--- *DETALHES DO PEDIDO* ---\n"
                 )
                 for i in st.session_state.carrinho_orc:
-                    msg += f"✅ {i.get('Item')} (x{i.get('Qtd')})\n"
+                    msg += f"✅ {i.get('Item')} — {i.get('Qtd')} unid.\n"
                 
                 msg += (
                     f"\n--- *VALORES* ---\n"
                     f"💰 *Total:* R$ {total_geral_orc:.2f}\n"
-                    f"💳 *Pagamento:* {forma_pagamento_input}\n\n"
-                    f"Muito obrigado pela preferência! 😊"
+                    f"💳 *Forma de Pagamento:* {forma_pagamento_input}\n"
+                    f"📍 *Entrega:* R$ {v_entrega_final:.2f}\n\n"
+                    f"Aguardamos sua confirmação para garantir sua data! 😊"
                 )
                 st.code(msg, language="text")
             
