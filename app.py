@@ -227,8 +227,8 @@ def main():
                 st.rerun()
         with col_rec3:
             st.write("")
-            # NOVO BOTÃO DELETAR ADICIONADO AQUI
             if st.button("🗑️ Deletar", use_container_width=True) and receita_selecionada != "":
+                # Filtra o DF para remover apenas a receita selecionada
                 df_restante = df_rec[df_rec['nome_receita'] != receita_selecionada]
                 conn.update(worksheet="Receitas", data=df_restante)
                 st.warning(f"Receita '{receita_selecionada}' removida!")
@@ -256,7 +256,6 @@ def main():
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
                 
-                # --- ALTERAÇÃO AQUI: REMOÇÃO DO PARÂMETRO 'VALUE' ---
                 k_qtd = f"qtd_{i}"
                 if k_qtd not in st.session_state:
                     st.session_state[k_qtd] = 0.0
@@ -268,7 +267,6 @@ def main():
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 
                 with c2:
-                    # Alterado para não causar o conflito Session State API
                     qtd_usada = st.number_input(f"Qtd", key=k_qtd, step=0.01)
                 
                 with c3:
