@@ -291,7 +291,9 @@ def main():
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
+                        
                         st.session_state.n_itens_manual -= 1
+                        
                         for chave in [f"nome_{ultimo_idx}", f"qtd_{ultimo_idx}", f"u_{ultimo_idx}"]:
                             if chave in st.session_state:
                                 del st.session_state[chave]
@@ -340,3 +342,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
