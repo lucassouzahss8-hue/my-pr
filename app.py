@@ -12,6 +12,10 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# --- ESTADOS PARA O BOTÃO DE EXCLUIR FUNCIONAR ---
+if "chave_reset" not in st.session_state:
+    st.session_state.chave_reset = 0
+
 # 2. Estilização CSS
 st.markdown("""
     <style>
@@ -41,7 +45,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 
-# Funções de Carregamento (Mantidas originais)
+# Funções de Carregamento (Mantidas)
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=0)
@@ -158,16 +162,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 st.session_state.carrinho_orc = []
                 st.rerun()
 
-    with t2:
-        df_salvos = carregar_historico_orc()
-        if not df_salvos.empty:
-            for i, row in df_salvos.iterrows():
-                c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5])
-                c1.write(row.get('Data', '')); c2.write(row.get('Cliente', ''))
-                c3.write(row.get('Pedido', '')); c4.write(row.get('Valor_Final', ''))
-                if c5.button("🗑️", key=f"del_h_{i}"):
-                    conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i)); st.rerun()
-
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
@@ -191,10 +185,11 @@ def main():
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
                 st.session_state.n_itens_manual = len(dados_rec)
+                # Sincronizamos os nomes e chaves para o carregamento
                 for idx, row in enumerate(dados_rec.itertuples()):
-                    st.session_state[f"nome_{idx}"] = row.ingrediente
-                    st.session_state[f"qtd_{idx}"] = float(row.qtd)
-                    st.session_state[f"u_{idx}"] = row.unid
+                    st.session_state[f"nome_{idx}_{st.session_state.chave_reset}"] = row.ingrediente
+                    st.session_state[f"qtd_{idx}_{st.session_state.chave_reset}"] = float(row.qtd)
+                    st.session_state[f"u_{idx}_{st.session_state.chave_reset}"] = row.unid
                 st.rerun()
 
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
@@ -213,7 +208,7 @@ def main():
     with col_esq:
         st.subheader("🛒 Ingredientes")
         
-        # Mantendo o campo numérico original
+        # O campo numérico que você quer manter
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         
         lista_para_salvar = []
@@ -221,14 +216,16 @@ def main():
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
+                # O segredo: adicionamos a 'chave_reset' ao final da key. 
+                # Quando deletamos, mudamos esse número e o Streamlit limpa o erro.
                 with c1:
-                    escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
+                    escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}_{st.session_state.chave_reset}")
                 with c2:
-                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
+                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}_{st.session_state.chave_reset}", step=0.01)
                 with c3:
-                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}_{st.session_state.chave_reset}")
                 
-                # Cálculos (Mantidos originais)
+                # Cálculos
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
@@ -245,25 +242,27 @@ def main():
                 
                 with c5:
                     st.write("") 
-                    # --- BLOCO DE EXCLUSÃO CORRIGIDO ---
-                    if st.button("❌", key=f"del_ing_man_{i}"):
-                        # 1. Primeiro removemos as chaves do widget que será excluído (o último)
-                        # Isso evita que o Streamlit tente renderizar um widget com valor "velho"
-                        ultimo_idx = int(n_itens_input) - 1
+                    if st.button("❌", key=f"del_ing_man_{i}_{st.session_state.chave_reset}"):
+                        # 1. Pegamos todos os valores atuais antes de apagar
+                        valores_atuais = []
+                        for j in range(int(n_itens_input)):
+                            if j != i: # Ignora o que estamos deletando
+                                valores_atuais.append({
+                                    "n": st.session_state[f"nome_{j}_{st.session_state.chave_reset}"],
+                                    "q": st.session_state[f"qtd_{j}_{st.session_state.chave_reset}"],
+                                    "u": st.session_state[f"u_{j}_{st.session_state.chave_reset}"]
+                                })
                         
-                        # 2. Reorganizamos os valores no session_state (subindo os itens)
-                        for j in range(i, ultimo_idx):
-                            st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
-                            st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
-                            st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
-                        
-                        # 3. Limpamos as chaves da última linha que agora sumiu
-                        del st.session_state[f"nome_{ultimo_idx}"]
-                        del st.session_state[f"qtd_{ultimo_idx}"]
-                        del st.session_state[f"u_{ultimo_idx}"]
-                        
-                        # 4. Atualizamos o contador numérico
+                        # 2. Mudamos o "reset" para o Streamlit esquecer os widgets antigos (evita o erro da imagem)
+                        st.session_state.chave_reset += 1
                         st.session_state.n_itens_manual -= 1
+                        
+                        # 3. Recolocamos os valores nas novas chaves
+                        for idx, val in enumerate(valores_atuais):
+                            st.session_state[f"nome_{idx}_{st.session_state.chave_reset}"] = val["n"]
+                            st.session_state[f"qtd_{idx}_{st.session_state.chave_reset}"] = val["q"]
+                            st.session_state[f"u_{idx}_{st.session_state.chave_reset}"] = val["u"]
+                        
                         st.rerun()
 
     with col_dir:
@@ -272,7 +271,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
-    # Cálculos finais de preço (Mantidos originais)
+    # Cálculos finais
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
