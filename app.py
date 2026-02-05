@@ -115,9 +115,7 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- CORREÇÃO TÉCNICA AQUI ---
 def adicionar_ao_carrinho():
-    # Buscamos os valores diretamente do session_state pelas keys
     nome = st.session_state.sel_orc_it
     qtd = st.session_state.q_orc_input
     
@@ -142,10 +140,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         
         c_it1, c_it2 = st.columns([3, 1])
         item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
-        # Usamos uma key específica para a quantidade
         qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc_input")
         
-        # O botão agora chama a função sem passar argumentos, lendo direto do estado
         st.button("➕ Adicionar Item ao Grupo", use_container_width=True, on_click=adicionar_ao_carrinho)
 
         if st.session_state.carrinho_orc:
@@ -222,7 +218,7 @@ def main():
             st.write("") 
             if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
-                st.session_state.nome_prod = receita_selecionada
+                st.session_state.nome_prod_input = receita_selecionada
                 st.session_state.n_itens_manual = len(dados_rec)
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
@@ -251,19 +247,31 @@ def main():
         if not df_ing.empty:
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
+                
+                # --- ALTERAÇÃO AQUI: REMOÇÃO DO PARÂMETRO 'VALUE' ---
+                k_qtd = f"qtd_{i}"
+                if k_qtd not in st.session_state:
+                    st.session_state[k_qtd] = 0.0
+
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
+                
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
+                
                 with c2:
-                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01, value=st.session_state.get(f"qtd_{i}", 0.0))
+                    # Alterado para não causar o conflito Session State API
+                    qtd_usada = st.number_input(f"Qtd", key=k_qtd, step=0.01)
+                
                 with c3:
                     unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+                
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
                 if unid_uso == "g" and u_base == "kg": fator = 1/1000
                 elif unid_uso == "kg" and u_base == "g": fator = 1000
                 elif unid_uso == "ml" and u_base == "l": fator = 1/1000
+                
                 custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
                 custo_ingredientes_total += custo_parcial
                 lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
