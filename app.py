@@ -52,6 +52,8 @@ if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 if "n_itens_receita" not in st.session_state:
     st.session_state.n_itens_receita = 1
+if "versao_lista" not in st.session_state:
+    st.session_state.versao_lista = 0
 
 def carregar_ingredientes():
     try:
@@ -200,6 +202,7 @@ def main():
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
                 st.session_state.n_itens_receita = len(dados_rec)
+                st.session_state.versao_lista += 1 # Força atualização do widget de contagem
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
@@ -229,8 +232,8 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Usamos uma chave que nao entra em conflito com o widget interno
-        n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key="n_itens_widget")
+        # Correção: Chave dinâmica baseada em 'versao_lista' para permitir decremento via código
+        n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"n_itens_widget_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
         lista_para_salvar = []
@@ -266,11 +269,20 @@ def main():
                 with c5:
                     st.write("")
                     if st.button("❌", key=f"del_ing_man_{i}"):
+                        # Reorganiza os itens seguintes para a posição anterior
                         for j in range(i, st.session_state.n_itens_receita - 1):
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
+                        
+                        # Remove as chaves do último item que "sobrou"
+                        last_idx = st.session_state.n_itens_receita - 1
+                        del st.session_state[f"nome_{last_idx}"]
+                        del st.session_state[f"qtd_{last_idx}"]
+                        del st.session_state[f"u_{last_idx}"]
+                        
                         st.session_state.n_itens_receita -= 1
+                        st.session_state.versao_lista += 1 # Incrementa para atualizar o widget principal
                         st.rerun()
 
     with col_dir:
