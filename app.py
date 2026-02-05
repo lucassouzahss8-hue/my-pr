@@ -32,41 +32,31 @@ st.markdown("""
         box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
         color: white; 
     }
-    .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
-    
-    @media (max-width: 640px) {
-        .stButton button {
-            width: 100%;
-            height: 48px;
-            margin-bottom: 5px;
-        }
-        .titulo-planilha { font-size: 24px; }
-    }
     </style>
     """, unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
+# Inicialização de estados
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
+if "lista_ingredientes_receita" not in st.session_state:
+    st.session_state.lista_ingredientes_receita = []
 
-# Funções de Carregamento
+# Funções de Dados
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=0)
-        if df is None or df.empty:
-            return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
+        if df is None or df.empty: return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
-    except:
-        return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
+    except: return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
 def carregar_receitas_nuvem():
     try:
         df = conn.read(worksheet="Receitas", ttl=0)
         return df if df is not None else pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
-    except:
-        return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
+    except: return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
 def carregar_historico_orc():
     try:
@@ -75,8 +65,7 @@ def carregar_historico_orc():
             df.columns = [c.replace(" ", "_") for c in df.columns]
             return df
         return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
-    except:
-        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
+    except: return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
 
 def exportar_pdf(cliente, pedido, itens, total):
     pdf = FPDF()
@@ -199,11 +188,14 @@ def main():
             if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
-                st.session_state.n_itens_manual = len(dados_rec)
-                for idx, row in enumerate(dados_rec.itertuples()):
-                    st.session_state[f"nome_{idx}"] = row.ingrediente
-                    st.session_state[f"qtd_{idx}"] = float(row.qtd)
-                    st.session_state[f"u_{idx}"] = row.unid
+                # Carrega para a lista interna em vez de forçar nos widgets
+                st.session_state.lista_ingredientes_receita = []
+                for row in dados_rec.itertuples():
+                    st.session_state.lista_ingredientes_receita.append({
+                        "ingrediente": row.ingrediente,
+                        "qtd": float(row.qtd),
+                        "unid": row.unid
+                    })
                 st.rerun()
         with col_rec3:
             st.write("")
@@ -224,62 +216,58 @@ def main():
         forma_pagamento = st.selectbox("Pagamento", ["Crédito", "PIX"])
     st.divider()
 
+    # --- SEÇÃO DE INGREDIENTES REFORMULADA ---
     custo_ingredientes_total = 0.0
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
-        st.subheader("🛒 Ingredientes")
-        n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
-        lista_para_salvar = []
-        if not df_ing.empty:
-            for i in range(int(n_itens_input)):
-                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
-                
-                # Inicialização segura das chaves
-                if f"nome_{i}" not in st.session_state: st.session_state[f"nome_{i}"] = df_ing['nome'].iloc[0]
-                if f"qtd_{i}" not in st.session_state: st.session_state[f"qtd_{i}"] = 0.0
-                if f"u_{i}" not in st.session_state: st.session_state[f"u_{i}"] = "g"
+        st.subheader("🛒 Ingredientes da Receita")
+        
+        # Interface para adicionar novo ingrediente à lista
+        c_add1, c_add2, c_add3, c_add4 = st.columns([3, 1, 1, 1])
+        ing_novo = c_add1.selectbox("Escolha um ingrediente", options=[""] + df_ing['nome'].tolist(), key="ing_add_temp")
+        qtd_nova = c_add2.number_input("Qtd", min_value=0.0, step=0.01, key="qtd_add_temp")
+        unid_nova = c_add3.selectbox("Unid", ["g", "kg", "ml", "L", "unidade"], key="unid_add_temp")
+        
+        if c_add4.button("➕", use_container_width=True):
+            if ing_novo != "" and qtd_nova > 0:
+                st.session_state.lista_ingredientes_receita.append({
+                    "ingrediente": ing_novo, "qtd": qtd_nova, "unid": unid_nova
+                })
+                st.rerun()
 
-                with c1:
-                    escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
-                with c2:
-                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
-                with c3:
-                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
-                
-                # Cálculos
-                dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
-                fator = 1.0
-                u_base = str(dados_item['unidade']).lower().strip()
-                if unid_uso == "g" and u_base == "kg": fator = 1/1000
-                elif unid_uso == "kg" and u_base == "g": fator = 1000
-                elif unid_uso == "ml" and u_base == "l": fator = 1/1000
-                
-                custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
-                custo_ingredientes_total += custo_parcial
-                lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
-                
-                with c4:
-                    st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
-                
-                # --- LÓGICA DE EXCLUSÃO CORRIGIDA ---
-                with c5:
-                    st.write("") 
-                    if st.button("❌", key=f"del_ing_{i}"):
-                        # Para evitar o erro do Streamlit, primeiro removemos os valores do State
-                        # e reorganizamos as posições
-                        for j in range(i, int(n_itens_input) - 1):
-                            st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
-                            st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
-                            st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
-                        
-                        # Removemos as chaves do último item que "sobrou"
-                        ultimo_idx = int(n_itens_input) - 1
-                        del st.session_state[f"nome_{ultimo_idx}"]
-                        del st.session_state[f"qtd_{ultimo_idx}"]
-                        del st.session_state[f"u_{ultimo_idx}"]
-                        
-                        st.session_state.n_itens_manual -= 1
-                        st.rerun()
+        st.write("---")
+        
+        # Exibição e Exclusão dos Itens da Lista
+        lista_final_salvar = []
+        for idx, item in enumerate(st.session_state.lista_ingredientes_receita):
+            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
+            
+            # Busca preço
+            dados_item = df_ing[df_ing['nome'] == item['ingrediente']].iloc[0]
+            fator = 1.0
+            u_base = str(dados_item['unidade']).lower().strip()
+            if item['unid'] == "g" and u_base == "kg": fator = 1/1000
+            elif item['unid'] == "kg" and u_base == "g": fator = 1000
+            elif item['unid'] == "ml" and u_base == "l": fator = 1/1000
+            
+            custo_parcial = (item['qtd'] * fator) * float(dados_item['preco'])
+            custo_ingredientes_total += custo_parcial
+            
+            c1.write(f"**{item['ingrediente']}**")
+            c2.write(f"{item['qtd']}")
+            c3.write(f"{item['unid']}")
+            c4.write(f"R$ {custo_parcial:.2f}")
+            
+            if c5.button("❌", key=f"del_ing_list_{idx}"):
+                st.session_state.lista_ingredientes_receita.pop(idx)
+                st.rerun()
+            
+            lista_final_salvar.append({
+                "nome_receita": nome_produto_final,
+                "ingrediente": item['ingrediente'],
+                "qtd": item['qtd'],
+                "unid": item['unid']
+            })
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
@@ -287,7 +275,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
-    # Cálculos finais de preço
+    # Cálculos de Preço
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
@@ -311,8 +299,8 @@ def main():
         })
         st.table(df_resumo)
         if st.button("💾 Salvar Receita", use_container_width=True):
-            if nome_produto_final:
-                df_nova = pd.DataFrame(lista_para_salvar)
+            if nome_produto_final and st.session_state.lista_ingredientes_receita:
+                df_nova = pd.DataFrame(lista_final_salvar)
                 df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
                 conn.update(worksheet="Receitas", data=df_final)
                 st.success(f"Receita '{nome_produto_final}' salva!")
