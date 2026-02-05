@@ -47,15 +47,8 @@ st.markdown("""
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Inicialização de estados
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
-
-# --- NOVOS ESTADOS PARA CONTROLE DE LINHAS DINÂMICAS ---
-if "ids_ingredientes" not in st.session_state:
-    st.session_state.ids_ingredientes = [0]  # Começa com uma linha
-if "contador_id" not in st.session_state:
-    st.session_state.contador_id = 1
 
 # Funções de Carregamento
 def carregar_ingredientes():
@@ -206,16 +199,11 @@ def main():
             if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
-                
-                # Resetando IDs para carregar a receita
-                st.session_state.ids_ingredientes = []
+                st.session_state.n_itens_manual = len(dados_rec)
                 for idx, row in enumerate(dados_rec.itertuples()):
-                    id_novo = st.session_state.contador_id
-                    st.session_state.ids_ingredientes.append(id_novo)
-                    st.session_state[f"nome_id_{id_novo}"] = row.ingrediente
-                    st.session_state[f"qtd_id_{id_novo}"] = float(row.qtd)
-                    st.session_state[f"u_id_{id_novo}"] = row.unid
-                    st.session_state.contador_id += 1
+                    st.session_state[f"nome_{idx}"] = row.ingrediente
+                    st.session_state[f"qtd_{idx}"] = float(row.qtd)
+                    st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
         with col_rec3:
             st.write("")
@@ -238,27 +226,27 @@ def main():
 
     custo_ingredientes_total = 0.0
     col_esq, col_dir = st.columns([2, 1])
-    
     with col_esq:
         st.subheader("🛒 Ingredientes")
+        # --- AQUI ESTÁ A FORMA ORIGINAL QUE VOCÊ QUERIA ---
+        n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         
-        # Botão para adicionar nova linha manualmente
-        if st.button("➕ Adicionar Linha"):
-            st.session_state.ids_ingredientes.append(st.session_state.contador_id)
-            st.session_state.contador_id += 1
-            st.rerun()
-
         lista_para_salvar = []
         if not df_ing.empty:
-            for idx_view, id_real in enumerate(st.session_state.ids_ingredientes):
+            for i in range(int(n_itens_input)):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
+                # Garantir que as chaves existam para evitar erro de widget
+                if f"nome_{i}" not in st.session_state: st.session_state[f"nome_{i}"] = df_ing['nome'].iloc[0]
+                if f"qtd_{i}" not in st.session_state: st.session_state[f"qtd_{i}"] = 0.0
+                if f"u_{i}" not in st.session_state: st.session_state[f"u_{i}"] = "g"
+
                 with c1:
-                    escolha = st.selectbox(f"Item {idx_view+1}", options=df_ing['nome'].tolist(), key=f"nome_id_{id_real}")
+                    escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
                 with c2:
-                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_id_{id_real}", step=0.01)
+                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
                 with c3:
-                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_id_{id_real}")
+                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
                 
                 # Cálculos
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
@@ -277,12 +265,22 @@ def main():
                 
                 with c5:
                     st.write("") 
-                    if st.button("❌", key=f"del_ing_id_{id_real}"):
-                        st.session_state.ids_ingredientes.remove(id_real)
-                        # Limpeza opcional das chaves para manter o state limpo
-                        if f"nome_id_{id_real}" in st.session_state: del st.session_state[f"nome_id_{id_real}"]
-                        if f"qtd_id_{id_real}" in st.session_state: del st.session_state[f"qtd_id_{id_real}"]
-                        if f"u_id_{id_real}" in st.session_state: del st.session_state[f"u_id_{id_real}"]
+                    # --- BOTÃO EXCLUIR COM LÓGICA DE REARRANJO PARA EVITAR O ERRO ---
+                    if st.button("❌", key=f"del_ing_man_{i}"):
+                        # Movemos os valores das linhas de baixo para cima
+                        for j in range(i, int(n_itens_input) - 1):
+                            st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
+                            st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
+                            st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
+                        
+                        # Removemos o excesso do session_state antes de diminuir o contador
+                        ultimo_idx = int(n_itens_input) - 1
+                        # Limpamos as chaves para o Streamlit não dar conflito ao renderizar um item a menos
+                        for chave in [f"nome_{ultimo_idx}", f"qtd_{ultimo_idx}", f"u_{ultimo_idx}"]:
+                            if chave in st.session_state:
+                                del st.session_state[chave]
+                        
+                        st.session_state.n_itens_manual -= 1
                         st.rerun()
 
     with col_dir:
@@ -291,7 +289,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
-    # Cálculos finais de preço
+    # Cálculos finais
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
@@ -317,7 +315,7 @@ def main():
         if st.button("💾 Salvar Receita", use_container_width=True):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                df_final = pd.concat([df_rec[df_rec['nome_rece_ita'] != nome_produto_final], df_nova], ignore_index=True)
+                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
                 conn.update(worksheet="Receitas", data=df_final)
                 st.success(f"Receita '{nome_produto_final}' salva!")
                 st.rerun()
@@ -329,4 +327,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
