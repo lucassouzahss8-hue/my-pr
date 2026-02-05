@@ -211,7 +211,7 @@ def main():
 
     with st.expander("📂 Abrir ou Deletar Receitas Salvas"):
         receitas_nomes = df_rec['nome_receita'].unique().tolist() if not df_rec.empty else []
-        col_rec1, col_rec2 = st.columns([3, 1])
+        col_rec1, col_rec2, col_rec3 = st.columns([2, 1, 1])
         with col_rec1:
             receita_selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
         with col_rec2:
@@ -224,6 +224,14 @@ def main():
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
                     st.session_state[f"u_{idx}"] = row.unid
+                st.rerun()
+        with col_rec3:
+            st.write("")
+            # NOVO BOTÃO DELETAR ADICIONADO AQUI
+            if st.button("🗑️ Deletar", use_container_width=True) and receita_selecionada != "":
+                df_restante = df_rec[df_rec['nome_receita'] != receita_selecionada]
+                conn.update(worksheet="Receitas", data=df_restante)
+                st.warning(f"Receita '{receita_selecionada}' removida!")
                 st.rerun()
 
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
