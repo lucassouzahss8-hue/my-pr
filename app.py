@@ -228,7 +228,6 @@ def main():
         with col_rec3:
             st.write("")
             if st.button("🗑️ Deletar", use_container_width=True) and receita_selecionada != "":
-                # Filtra o DF para remover apenas a receita selecionada
                 df_restante = df_rec[df_rec['nome_receita'] != receita_selecionada]
                 conn.update(worksheet="Receitas", data=df_restante)
                 st.warning(f"Receita '{receita_selecionada}' removida!")
@@ -252,9 +251,11 @@ def main():
         st.subheader("🛒 Ingredientes")
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         lista_para_salvar = []
+        
         if not df_ing.empty:
             for i in range(int(n_itens_input)):
-                c1, c2, c3, c4 = st.columns([3, 1, 1, 1.5])
+                # Adicionamos uma coluna 0.5 para o botão de excluir
+                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
                 k_qtd = f"qtd_{i}"
                 if k_qtd not in st.session_state:
@@ -281,8 +282,22 @@ def main():
                 custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
                 custo_ingredientes_total += custo_parcial
                 lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
+                
                 with c4:
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
+                
+                # --- FUNÇÃO DE EXCLUIR ITEM DA RECEITA ATUAL ---
+                with c5:
+                    st.write("") # Espaçador
+                    if st.button("❌", key=f"del_ing_{i}"):
+                        # Reorganiza o session state removendo o item atual e subindo os próximos
+                        for j in range(i, int(n_itens_input) - 1):
+                            st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
+                            st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
+                            st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
+                        # Diminui o contador de itens
+                        st.session_state.n_itens_manual -= 1
+                        st.rerun()
 
     with col_dir:
         st.subheader("⚙️ Adicionais")
