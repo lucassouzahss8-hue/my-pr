@@ -33,15 +33,6 @@ st.markdown("""
         color: white; 
     }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
-    
-    @media (max-width: 640px) {
-        .stButton button {
-            width: 100%;
-            height: 48px;
-            margin-bottom: 5px;
-        }
-        .titulo-planilha { font-size: 24px; }
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -167,16 +158,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 st.session_state.carrinho_orc = []
                 st.rerun()
 
-    with t2:
-        df_salvos = carregar_historico_orc()
-        if not df_salvos.empty:
-            for i, row in df_salvos.iterrows():
-                c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5])
-                c1.write(row.get('Data', '')); c2.write(row.get('Cliente', ''))
-                c3.write(row.get('Pedido', '')); c4.write(row.get('Valor_Final', ''))
-                if c5.button("🗑️", key=f"del_h_{i}"):
-                    conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i)); st.rerun()
-
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
@@ -228,7 +209,6 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # --- AQUI ESTÁ A FORMA ORIGINAL QUE VOCÊ QUERIA ---
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         
         lista_para_salvar = []
@@ -236,11 +216,6 @@ def main():
             for i in range(int(n_itens_input)):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
-                # Garantir que as chaves existam para evitar erro de widget
-                if f"nome_{i}" not in st.session_state: st.session_state[f"nome_{i}"] = df_ing['nome'].iloc[0]
-                if f"qtd_{i}" not in st.session_state: st.session_state[f"qtd_{i}"] = 0.0
-                if f"u_{i}" not in st.session_state: st.session_state[f"u_{i}"] = "g"
-
                 with c1:
                     escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
                 with c2:
@@ -265,22 +240,26 @@ def main():
                 
                 with c5:
                     st.write("") 
-                    # --- BOTÃO EXCLUIR COM LÓGICA DE REARRANJO PARA EVITAR O ERRO ---
                     if st.button("❌", key=f"del_ing_man_{i}"):
-                        # Movemos os valores das linhas de baixo para cima
+                        # REARRANJO: Movemos os dados de baixo para cima
                         for j in range(i, int(n_itens_input) - 1):
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
                         
-                        # Removemos o excesso do session_state antes de diminuir o contador
-                        ultimo_idx = int(n_itens_input) - 1
-                        # Limpamos as chaves para o Streamlit não dar conflito ao renderizar um item a menos
-                        for chave in [f"nome_{ultimo_idx}", f"qtd_{ultimo_idx}", f"u_{ultimo_idx}"]:
-                            if chave in st.session_state:
-                                del st.session_state[chave]
-                        
+                        # CORREÇÃO DO ERRO DE API:
+                        # Primeiro decrementamos o número de itens
                         st.session_state.n_itens_manual -= 1
+                        
+                        # Só depois limpamos as chaves que "sobraram" no final
+                        ultimo_idx = int(n_itens_input) - 1
+                        if f"nome_{ultimo_idx}" in st.session_state:
+                            del st.session_state[f"nome_{ultimo_idx}"]
+                        if f"qtd_{ultimo_idx}" in st.session_state:
+                            del st.session_state[f"qtd_{ultimo_idx}"]
+                        if f"u_{ultimo_idx}" in st.session_state:
+                            del st.session_state[f"u_{ultimo_idx}"]
+                        
                         st.rerun()
 
     with col_dir:
