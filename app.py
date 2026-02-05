@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilização CSS + PWA + Ajustes Mobile
+# 2. Estilização CSS
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -43,18 +43,6 @@ st.markdown("""
         .titulo-planilha { font-size: 24px; }
     }
     </style>
-    
-    <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js').then(function(reg) {
-          console.log('PWA Ativo');
-        }).catch(function(err) {
-          console.log('Erro PWA:', err);
-        });
-      });
-    }
-    </script>
     """, unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -62,6 +50,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 
+# Funções de Carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=0)
@@ -118,7 +107,6 @@ def exportar_pdf(cliente, pedido, itens, total):
 def adicionar_ao_carrinho():
     nome = st.session_state.sel_orc_it
     qtd = st.session_state.q_orc_input
-    
     if nome != "":
         df_ing = carregar_ingredientes()
         p_unit_puro = float(df_ing[df_ing['nome'] == nome]['preco'].iloc[0])
@@ -129,7 +117,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
-    
     with t1:
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
         nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc")
@@ -137,11 +124,9 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         data_orc = c_cli3.date_input("Data do Orçamento", value=date.today(), key="data_orc")
         nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", key="grupo_orc")
         st.write("---")
-        
         c_it1, c_it2 = st.columns([3, 1])
         item_escolhido = c_it1.selectbox("Selecione o Item da Planilha:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
         qtd_orc = c_it2.number_input("Quantidade", min_value=1, value=1, key="q_orc_input")
-        
         st.button("➕ Adicionar Item ao Grupo", use_container_width=True, on_click=adicionar_ao_carrinho)
 
         if st.session_state.carrinho_orc:
@@ -162,7 +147,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 if c[5].button("❌", key=f"del_orc_{idx}"):
                     st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
-            
             st.divider()
             f1, f2 = st.columns(2)
             frete_val = f1.number_input("Taxa de Frete Total (R$)", value=0.0, key="frete_orc")
@@ -171,17 +155,14 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
-            
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
-            
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
                 novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
                 conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
                 st.success("Orçamento salvo!")
-
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
@@ -199,7 +180,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
-
     st.markdown("<h1 class='titulo-planilha'>📊 Precificador</h1>", unsafe_allow_html=True)
 
     with st.sidebar:
@@ -242,7 +222,6 @@ def main():
         distancia_km = st.number_input("Distância (km)", min_value=0.0, value=0.0, step=0.1)
     with col_p4:
         forma_pagamento = st.selectbox("Pagamento", ["Crédito", "PIX"])
-        
     st.divider()
 
     custo_ingredientes_total = 0.0
@@ -251,28 +230,24 @@ def main():
         st.subheader("🛒 Ingredientes")
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         lista_para_salvar = []
-        
         if not df_ing.empty:
             for i in range(int(n_itens_input)):
-                # Adicionamos uma coluna 0.5 para o botão de excluir
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
-                k_qtd = f"qtd_{i}"
-                if k_qtd not in st.session_state:
-                    st.session_state[k_qtd] = 0.0
+                # Inicialização segura das chaves
+                if f"nome_{i}" not in st.session_state: st.session_state[f"nome_{i}"] = df_ing['nome'].iloc[0]
+                if f"qtd_{i}" not in st.session_state: st.session_state[f"qtd_{i}"] = 0.0
+                if f"u_{i}" not in st.session_state: st.session_state[f"u_{i}"] = "g"
 
                 with c1:
-                    lista_nomes = df_ing['nome'].tolist()
-                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
-                
-                dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
-                
+                    escolha = st.selectbox(f"Item {i+1}", options=df_ing['nome'].tolist(), key=f"nome_{i}")
                 with c2:
-                    qtd_usada = st.number_input(f"Qtd", key=k_qtd, step=0.01)
-                
+                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
                 with c3:
                     unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
                 
+                # Cálculos
+                dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
                 if unid_uso == "g" and u_base == "kg": fator = 1/1000
@@ -286,16 +261,23 @@ def main():
                 with c4:
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 
-                # --- FUNÇÃO DE EXCLUIR ITEM DA RECEITA ATUAL ---
+                # --- LÓGICA DE EXCLUSÃO CORRIGIDA ---
                 with c5:
-                    st.write("") # Espaçador
+                    st.write("") 
                     if st.button("❌", key=f"del_ing_{i}"):
-                        # Reorganiza o session state removendo o item atual e subindo os próximos
+                        # Para evitar o erro do Streamlit, primeiro removemos os valores do State
+                        # e reorganizamos as posições
                         for j in range(i, int(n_itens_input) - 1):
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
-                        # Diminui o contador de itens
+                        
+                        # Removemos as chaves do último item que "sobrou"
+                        ultimo_idx = int(n_itens_input) - 1
+                        del st.session_state[f"nome_{ultimo_idx}"]
+                        del st.session_state[f"qtd_{ultimo_idx}"]
+                        del st.session_state[f"u_{ultimo_idx}"]
+                        
                         st.session_state.n_itens_manual -= 1
                         st.rerun()
 
@@ -305,6 +287,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
+    # Cálculos finais de preço
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
