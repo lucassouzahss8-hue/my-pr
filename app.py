@@ -41,7 +41,7 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 
-# Funções de Carregamento
+# Funções de Carregamento (Mantidas originais)
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=0)
@@ -158,6 +158,16 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 st.session_state.carrinho_orc = []
                 st.rerun()
 
+    with t2:
+        df_salvos = carregar_historico_orc()
+        if not df_salvos.empty:
+            for i, row in df_salvos.iterrows():
+                c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5])
+                c1.write(row.get('Data', '')); c2.write(row.get('Cliente', ''))
+                c3.write(row.get('Pedido', '')); c4.write(row.get('Valor_Final', ''))
+                if c5.button("🗑️", key=f"del_h_{i}"):
+                    conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i)); st.rerun()
+
 def main():
     df_ing = carregar_ingredientes()
     df_rec = carregar_receitas_nuvem()
@@ -186,13 +196,6 @@ def main():
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
                     st.session_state[f"u_{idx}"] = row.unid
                 st.rerun()
-        with col_rec3:
-            st.write("")
-            if st.button("🗑️ Deletar", use_container_width=True) and receita_selecionada != "":
-                df_restante = df_rec[df_rec['nome_receita'] != receita_selecionada]
-                conn.update(worksheet="Receitas", data=df_restante)
-                st.warning(f"Receita '{receita_selecionada}' removida!")
-                st.rerun()
 
     col_p1, col_p2, col_p3, col_p4 = st.columns([2, 1, 1, 1])
     with col_p1:
@@ -209,6 +212,8 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
+        
+        # Mantendo o campo numérico original
         n_itens_input = st.number_input("Número de itens:", min_value=1, key="n_itens_manual")
         
         lista_para_salvar = []
@@ -223,7 +228,7 @@ def main():
                 with c3:
                     unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
                 
-                # Cálculos
+                # Cálculos (Mantidos originais)
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
@@ -240,26 +245,25 @@ def main():
                 
                 with c5:
                     st.write("") 
+                    # --- BLOCO DE EXCLUSÃO CORRIGIDO ---
                     if st.button("❌", key=f"del_ing_man_{i}"):
-                        # REARRANJO: Movemos os dados de baixo para cima
-                        for j in range(i, int(n_itens_input) - 1):
+                        # 1. Primeiro removemos as chaves do widget que será excluído (o último)
+                        # Isso evita que o Streamlit tente renderizar um widget com valor "velho"
+                        ultimo_idx = int(n_itens_input) - 1
+                        
+                        # 2. Reorganizamos os valores no session_state (subindo os itens)
+                        for j in range(i, ultimo_idx):
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
                         
-                        # CORREÇÃO DO ERRO DE API:
-                        # Primeiro decrementamos o número de itens
+                        # 3. Limpamos as chaves da última linha que agora sumiu
+                        del st.session_state[f"nome_{ultimo_idx}"]
+                        del st.session_state[f"qtd_{ultimo_idx}"]
+                        del st.session_state[f"u_{ultimo_idx}"]
+                        
+                        # 4. Atualizamos o contador numérico
                         st.session_state.n_itens_manual -= 1
-                        
-                        # Só depois limpamos as chaves que "sobraram" no final
-                        ultimo_idx = int(n_itens_input) - 1
-                        if f"nome_{ultimo_idx}" in st.session_state:
-                            del st.session_state[f"nome_{ultimo_idx}"]
-                        if f"qtd_{ultimo_idx}" in st.session_state:
-                            del st.session_state[f"qtd_{ultimo_idx}"]
-                        if f"u_{ultimo_idx}" in st.session_state:
-                            del st.session_state[f"u_{ultimo_idx}"]
-                        
                         st.rerun()
 
     with col_dir:
@@ -268,7 +272,7 @@ def main():
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
 
-    # Cálculos finais
+    # Cálculos finais de preço (Mantidos originais)
     taxa_entrega = (distancia_km - km_gratis) * valor_por_km if distancia_km > km_gratis else 0.0
     v_quebra = custo_ingredientes_total * (perc_quebra / 100)
     v_despesas = custo_ingredientes_total * (perc_despesas / 100)
