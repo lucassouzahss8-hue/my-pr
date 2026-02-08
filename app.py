@@ -139,8 +139,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
-                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
-                total_venda_bruta_acumulada += v_venda_it
+                custo_item = v_custo_producao_unit * it['qtd']
+                total_custo_acumulado += custo_item
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
