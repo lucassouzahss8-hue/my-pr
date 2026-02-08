@@ -326,5 +326,40 @@ def main():
 
     secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento)
 
+def resumo_taxas_cmv_orcamento(
+    total_produtos,
+    frete,
+    embalagem,
+    taxa_cartao,
+    total_final
+):
+    if total_final <= 0:
+        cmv_pct = 0
+    else:
+        cmv_pct = (total_produtos / total_final) * 100
+
+    cor = "#4ade80" if cmv_pct <= 35 else "#facc15" if cmv_pct <= 45 else "#f87171"
+
+    st.markdown(
+        f"""
+        <div class="resultado-box">
+            <h3>📊 Resumo Financeiro</h3>
+            <p><b>Produtos:</b> R$ {total_produtos:.2f}</p>
+            <p><b>Frete:</b> R$ {frete:.2f}</p>
+            <p><b>Embalagem:</b> R$ {embalagem:.2f}</p>
+            <p><b>Taxas:</b> R$ {taxa_cartao:.2f}</p>
+            <hr style="border-color:#4b5563;">
+            <p><b>CMV:</b>
+                <span style="color:{cor}; font-weight:bold;">
+                    {cmv_pct:.1f}%
+                </span>
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+
+        
+    )
+
 if __name__ == "__main__":
     main()
