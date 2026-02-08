@@ -141,7 +141,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
                 custo_item = v_custo_producao_unit * it['qtd']
                 total_custo_acumulado += custo_item
-                lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
+                lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": custo_item})
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
@@ -340,7 +340,7 @@ def resumo_taxas_cmv_orcamento(
     taxa_cartao,
     preco_venda
 ):
-    cmv_pct = (custo_total / preco_venda) * 100 if preco_venda > 0 else 0
+    cmv_pct = (total_custo_acumulado / total_geral_orc) * 100 if total_geral_orc > 0 else 0
 
     cor = "#4ade80" if cmv_pct <= 35 else "#facc15" if cmv_pct <= 45 else "#f87171"
 
