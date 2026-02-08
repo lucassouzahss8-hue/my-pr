@@ -150,7 +150,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 if c[5].button("❌", key=f"del_orc_{idx}"):
                     total_venda_bruta_acumulada = 0.0
                     total_custo_acumulado = 0.0
-                    st.session_state.carrinho_orc:
+                    st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
             st.divider()
             f1, f2 = st.columns(2)
