@@ -146,7 +146,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
                 c[3].write(f"R$ {v_unit_custo_exibicao:.2f}")
-                c[4].write(f"**R$ {v_venda_it:.2f}**")
+                c[4].write(f"**R$ {custo_item:.2f}**")
                 if c[5].button("❌", key=f"del_orc_{idx}"):
                     st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
