@@ -159,12 +159,12 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
             resumo_taxas_cmv_orcamento(
-                    total_produtos=total_venda_bruta_acumulada,
-                    frete=frete_val,
-                    embalagem=emb_val,
-                    taxa_cartao=v_taxa_cartao_orc,
-                    total_final=total_geral_orc
-                )
+    custo_total=total_custo_acumulado,
+    frete=frete_val,
+    embalagem=emb_val,
+    taxa_cartao=v_taxa_cartao_orc,
+    preco_venda=total_geral_orc
+            )
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
@@ -334,16 +334,13 @@ def main():
     secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento)
 
 def resumo_taxas_cmv_orcamento(
-    total_produtos,
+    custo_total,
     frete,
     embalagem,
     taxa_cartao,
-    total_final
+    preco_venda
 ):
-    if total_final <= 0:
-        cmv_pct = 0
-    else:
-        cmv_pct = (total_produtos / total_final) * 100
+    cmv_pct = (custo_total / preco_venda) * 100 if preco_venda > 0 else 0
 
     cor = "#4ade80" if cmv_pct <= 35 else "#facc15" if cmv_pct <= 45 else "#f87171"
 
@@ -351,11 +348,11 @@ def resumo_taxas_cmv_orcamento(
         f"""
         <div class="resultado-box">
             <h3>📊 Resumo Financeiro</h3>
-            <p><b>Produtos:</b> R$ {total_produtos:.2f}</p>
+            <p><b>Custo Produção:</b> R$ {custo_total:.2f}</p>
             <p><b>Frete:</b> R$ {frete:.2f}</p>
             <p><b>Embalagem:</b> R$ {embalagem:.2f}</p>
             <p><b>Taxas:</b> R$ {taxa_cartao:.2f}</p>
-            <hr style="border-color:#4b5563;">
+            <hr>
             <p><b>CMV:</b>
                 <span style="color:{cor}; font-weight:bold;">
                     {cmv_pct:.1f}%
@@ -364,9 +361,6 @@ def resumo_taxas_cmv_orcamento(
         </div>
         """,
         unsafe_allow_html=True
-
-        
     )
-
 if __name__ == "__main__":
     main()
