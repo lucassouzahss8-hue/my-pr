@@ -132,45 +132,73 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         item_escolhido = c_it1.selectbox("Selecione o Item:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
         qtd_orc = c_it2.number_input("Qtd", min_value=1, value=1, key="q_orc_input")
         st.button("➕ Adicionar Item ao Grupo", use_container_width=True, on_click=adicionar_ao_carrinho)
+        
         if st.session_state.carrinho_orc:
-            total_custo_acumulado = 0.0
-            lista_pdf = []
             total_venda_bruta_acumulada = 0.0
-            total_custo_acumulado = 0.0
+            total_ingredientes_acumulados = 0.0
+            lista_pdf = []
+            
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
+                total_ingredientes_acumulados += v_unit_custo_exibicao
+                
                 v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
-                custo_item = v_custo_producao_unit * it['qtd']
-                total_custo_acumulado += custo_item
-                lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": custo_item})
+                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
+                
                 total_venda_bruta_acumulada += v_venda_it
-                total_custo_acumulado += custo_item
+                lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
+                
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
                 c[3].write(f"R$ {v_unit_custo_exibicao:.2f}")
-                c[4].write(f"**R$ {custo_item:.2f}**")
+                c[4].write(f"**R$ {v_venda_it:.2f}**")
                 if c[5].button("❌", key=f"del_orc_{idx}"):
                     st.session_state.carrinho_orc.pop(idx)
-                    total_venda_bruta_acumulada = 0.0
-                    total_custo_acumulado = 0.0
                     st.rerun()
+            
             st.divider()
             f1, f2 = st.columns(2)
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
+            
+            # Calculos de Resumo Financeiro (Igual ao precificador)
+            v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
+            v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
+            v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
+            v_custo_total_orc = v_cmv_orc + v_despesas_orc
+            v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
+            
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
-            st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
-            resumo_taxas_cmv_orcamento(
-                                        custo_total=total_custo_acumulado,
-                                        frete=frete_val,
-                                        embalagem=emb_val,
-                                        taxa_cartao=v_taxa_cartao_orc,
-                                        preco_venda=total_geral_orc
-                                        )
+            
+            cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
+            cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
+
+            # Interface de Resumo
+            res1, res2 = st.columns([1.5, 1])
+            with res1:
+                st.write("**Detalhamento de Taxas (Grupo)**")
+                df_res_orc = pd.DataFrame({
+                    "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Frete", "Taxas"],
+                    "Valor": [f"R$ {total_ingredientes_acumulados:.2f}", f"R$ {v_quebra_orc:.2f}", f"R$ {v_despesas_orc:.2f}", f"R$ {emb_val:.2f}", f"R$ {frete_val:.2f}", f"R$ {v_taxa_cartao_orc:.2f}"]
+                })
+                st.table(df_res_orc)
+            
+            with res2:
+                st.markdown(f"""
+                <div style='background-color: #262730; padding: 20px; border-radius: 10px; border-left: 5px solid #1e3a8a;'>
+                    <p style='margin:0; font-size:13px; opacity:0.8; color:white;'>RESUMO DO ORÇAMENTO</p>
+                    <p style='margin:0; color:white;'><b>CMV:</b> <span style='color:{cor_cmv_orc}; font-weight:bold;'>{cmv_perc_orc:.1f}%</span></p>
+                    <p style='margin:0; color:white;'><b>Lucro Líquido:</b> <span style='color:#4ade80;'>R$ {v_lucro_orc:.2f}</span></p>
+                    <hr style='margin:10px 0; border-color:#4b5563;'>
+                    <h2 style='margin:0; color:white; font-size:28px;'>R$ {total_geral_orc:.2f}</h2>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.write("")
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
@@ -215,7 +243,7 @@ def main():
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
                 st.session_state.n_itens_receita = len(dados_rec)
-                st.session_state.versao_lista += 1 # Força atualização do widget de contagem
+                st.session_state.versao_lista += 1 
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
@@ -245,7 +273,6 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Correção: Chave dinâmica baseada em 'versao_lista' para permitir decremento via código
         n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"n_itens_widget_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
@@ -253,16 +280,12 @@ def main():
         if not df_ing.empty:
             for i in range(st.session_state.n_itens_receita):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
-                
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
-                
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
-                
                 with c2:
                     qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
-                
                 with c3:
                     unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
                 
@@ -278,24 +301,19 @@ def main():
                 
                 with c4:
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
-                
                 with c5:
                     st.write("")
                     if st.button("❌", key=f"del_ing_man_{i}"):
-                        # Reorganiza os itens seguintes para a posição anterior
                         for j in range(i, st.session_state.n_itens_receita - 1):
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
-                        
-                        # Remove as chaves do último item que "sobrou"
                         last_idx = st.session_state.n_itens_receita - 1
                         del st.session_state[f"nome_{last_idx}"]
                         del st.session_state[f"qtd_{last_idx}"]
                         del st.session_state[f"u_{last_idx}"]
-                        
                         st.session_state.n_itens_receita -= 1
-                        st.session_state.versao_lista += 1 # Incrementa para atualizar o widget principal
+                        st.session_state.versao_lista += 1 
                         st.rerun()
 
     with col_dir:
@@ -339,34 +357,5 @@ def main():
 
     secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento)
 
-def resumo_taxas_cmv_orcamento(
-    custo_total,
-    frete,
-    embalagem,
-    taxa_cartao,
-    preco_venda
-):
-    cmv_pct = (total_custo_acumulado / total_geral_orc) * 100 if total_geral_orc > 0 else 0
-
-    cor = "#4ade80" if cmv_pct <= 35 else "#facc15" if cmv_pct <= 45 else "#f87171"
-
-    st.markdown(
-        f"""
-        <div class="resultado-box">
-            <h3>📊 Resumo Financeiro</h3>
-            <p><b>Custo Produção:</b> R$ {custo_total:.2f}</p>
-            <p><b>Frete:</b> R$ {frete:.2f}</p>
-            <p><b>Embalagem:</b> R$ {embalagem:.2f}</p>
-            <p><b>Taxas:</b> R$ {taxa_cartao:.2f}</p>
-            <hr>
-            <p><b>CMV:</b>
-                <span style="color:{cor}; font-weight:bold;">
-                    {cmv_pct:.1f}%
-                </span>
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 if __name__ == "__main__":
     main()
