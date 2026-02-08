@@ -135,6 +135,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         if st.session_state.carrinho_orc:
             total_custo_acumulado = 0.0
             lista_pdf = []
+            total_venda_bruta_acumulada = 0.0
+                    total_custo_acumulado = 0.0
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
@@ -142,14 +144,14 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 custo_item = v_custo_producao_unit * it['qtd']
                 total_custo_acumulado += custo_item
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": custo_item})
+                total_venda_bruta_acumulada += v_venda_it
+                total_custo_acumulado += custo_item
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
                 c[2].write(f"R$ {it['preco_puro']:.2f}")
                 c[3].write(f"R$ {v_unit_custo_exibicao:.2f}")
                 c[4].write(f"**R$ {custo_item:.2f}**")
                 if c[5].button("❌", key=f"del_orc_{idx}"):
-                    total_venda_bruta_acumulada = 0.0
-                    total_custo_acumulado = 0.0
                     st.session_state.carrinho_orc.pop(idx)
                     st.rerun()
             st.divider()
