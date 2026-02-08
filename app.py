@@ -133,7 +133,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         qtd_orc = c_it2.number_input("Qtd", min_value=1, value=1, key="q_orc_input")
         st.button("➕ Adicionar Item ao Grupo", use_container_width=True, on_click=adicionar_ao_carrinho)
         if st.session_state.carrinho_orc:
-            total_venda_bruta_acumulada = 0.0
+            total_custo_acumulado = 0.0
             lista_pdf = []
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
