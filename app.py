@@ -159,11 +159,11 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             st.markdown(f"### TOTAL DO ORÇAMENTO: R$ {total_geral_orc:.2f}")
             resumo_taxas_cmv_orcamento(
-    custo_total=total_custo_acumulado,
-    frete=frete_val,
-    embalagem=emb_val,
-    taxa_cartao=v_taxa_cartao_orc,
-    preco_venda=total_geral_orc
+            custo_total=total_custo_acumulado,
+            frete=frete_val,
+            embalagem=emb_val,
+            taxa_cartao=v_taxa_cartao_orc,
+            preco_venda=total_geral_orc
             )
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
