@@ -136,7 +136,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             total_custo_acumulado = 0.0
             lista_pdf = []
             total_venda_bruta_acumulada = 0.0
-                    total_custo_acumulado = 0.0
+            total_custo_acumulado = 0.0
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
