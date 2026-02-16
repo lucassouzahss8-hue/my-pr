@@ -55,9 +55,10 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
+# CORREÇÃO: ttl=0 garante que o app busque os dados novos da planilha toda vez que carregar
 def carregar_ingredientes():
     try:
-        df = conn.read(worksheet="Ingredientes", ttl=1)
+        df = conn.read(worksheet="Ingredientes", ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
         df.columns = [str(c).strip().lower() for c in df.columns]
@@ -67,14 +68,14 @@ def carregar_ingredientes():
 
 def carregar_receitas_nuvem():
     try:
-        df = conn.read(worksheet="Receitas", ttl=1)
+        df = conn.read(worksheet="Receitas", ttl=0)
         return df if df is not None else pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
     except:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
 def carregar_historico_orc():
     try:
-        df = conn.read(worksheet="Orcamentos_Salvos", ttl=1)
+        df = conn.read(worksheet="Orcamentos_Salvos", ttl=0)
         if df is not None:
             df.columns = [c.replace(" ", "_") for c in df.columns]
             return df
@@ -244,9 +245,9 @@ def main():
                 st.session_state.n_itens_receita = len(dados_rec)
                 st.session_state.versao_lista += 1 
                 for idx, row in enumerate(dados_rec.itertuples()):
-                    st.session_state[f"nome_{idx}"] = row.ingrediente
-                    st.session_state[f"qtd_{idx}"] = float(row.qtd)
-                    st.session_state[f"u_{idx}"] = row.unid
+                    st.session_state[f"nome_{idx}_{st.session_state.versao_lista}"] = row.ingrediente
+                    st.session_state[f"qtd_{idx}_{st.session_state.versao_lista}"] = float(row.qtd)
+                    st.session_state[f"u_{idx}_{st.session_state.versao_lista}"] = row.unid
                 st.rerun()
         with col_rec3:
             st.write("")
@@ -272,7 +273,6 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Correção aqui: O widget de número de itens agora usa a versao_lista para resetar limpo
         n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"n_itens_widget_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
@@ -303,10 +303,6 @@ def main():
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 with c5:
                     st.write("")
-                    # RESOLUÇÃO DO PROBLEMA DO "X":
-                    # Em vez de tentar remover chaves do session_state (que causa o erro da foto),
-                    # apenas reorganizamos os dados e mudamos a 'versao_lista' para forçar o Streamlit
-                    # a renderizar os widgets novamente sem conflito.
                     if st.button("❌", key=f"del_ing_man_{i}_{st.session_state.versao_lista}"):
                         novos_dados = []
                         for idx in range(st.session_state.n_itens_receita):
