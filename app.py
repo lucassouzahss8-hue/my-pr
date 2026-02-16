@@ -55,7 +55,6 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
-# Funções de Carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
@@ -164,7 +163,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            # Calculos de Resumo Financeiro
             v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
             v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
             v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
@@ -178,7 +176,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
 
-            # Interface de Resumo
             res1, res2 = st.columns([1.5, 1])
             with res1:
                 st.write("**Detalhamento de Taxas (Grupo)**")
@@ -236,7 +233,8 @@ def main():
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
                 st.session_state.n_itens_receita = len(dados_rec)
-                st.session_state.versao_lista += 1 # INCREMENTA A VERSÃO PARA FORÇAR O RESET DOS WIDGETS
+                st.session_state.versao_lista += 1 
+                # LIMPANDO CHAVES ANTIGAS E DEFININDO NOVAS
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
@@ -266,7 +264,6 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # O widget n_itens agora depende da versao_lista
         n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"ni_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
@@ -276,25 +273,25 @@ def main():
             for i in range(st.session_state.n_itens_receita):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
-                # Resgate dos valores do state (usados para o index inicial)
-                val_nome = st.session_state.get(f"nome_{i}", lista_nomes[0])
-                idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
+                # BUSCA O VALOR QUE JÁ ESTÁ NO SESSION STATE
+                val_nome_atual = st.session_state.get(f"nome_{i}", lista_nomes[0])
+                idx_selecionado = lista_nomes.index(val_nome_atual) if val_nome_atual in lista_nomes else 0
                 
                 with c1:
-                    # MUDANÇA CHAVE: Adicionamos a versão na KEY do selectbox para forçar o reconhecimento do item correto
-                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_nome, key=f"nome_{i}_v{st.session_state.versao_lista}")
+                    # KEY DINÂMICA COM VERSÃO LISTA GARANTE O CARREGAMENTO CORRETO
+                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_selecionado, key=f"sel_nome_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"nome_{i}"] = escolha
                 
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
                     val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
-                    qtd_usada = st.number_input(f"Qtd", value=val_qtd, key=f"qtd_{i}_v{st.session_state.versao_lista}", step=0.01)
+                    qtd_usada = st.number_input(f"Qtd", value=val_qtd, key=f"num_qtd_{i}_{st.session_state.versao_lista}", step=0.01)
                     st.session_state[f"qtd_{i}"] = qtd_usada
                 with c3:
                     unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                    val_unid = st.session_state.get(f"u_{i}", "g")
-                    idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
-                    unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"u_{i}_v{st.session_state.versao_lista}")
+                    val_u = st.session_state.get(f"u_{i}", "g")
+                    idx_u = unid_opcoes.index(val_u) if val_u in unid_opcoes else 0
+                    unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_u, key=f"sel_u_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"u_{i}"] = unid_uso
                 
                 fator = 1.0
