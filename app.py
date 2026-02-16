@@ -55,9 +55,10 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
+# Ajuste: TTL alterado para 1 para estabilizar a busca e evitar resets ao digitar
 def carregar_ingredientes():
     try:
-        df = conn.read(worksheet="Ingredientes", ttl=0)
+        df = conn.read(worksheet="Ingredientes", ttl=1)
         if df is None or df.empty:
             return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
         df.columns = [str(c).strip().lower() for c in df.columns]
@@ -67,14 +68,14 @@ def carregar_ingredientes():
 
 def carregar_receitas_nuvem():
     try:
-        df = conn.read(worksheet="Receitas", ttl=0)
+        df = conn.read(worksheet="Receitas", ttl=1)
         return df if df is not None else pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
     except:
         return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
 def carregar_historico_orc():
     try:
-        df = conn.read(worksheet="Orcamentos_Salvos", ttl=0)
+        df = conn.read(worksheet="Orcamentos_Salvos", ttl=1)
         if df is not None:
             df.columns = [c.replace(" ", "_") for c in df.columns]
             return df
@@ -163,7 +164,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            # Calculos de Resumo Financeiro (Igual ao precificador)
+            # Calculos de Resumo Financeiro
             v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
             v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
             v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
@@ -204,9 +205,11 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
-                novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
-                conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
-                st.success("Orçamento salvo!")
+                # Ajuste: Verificação para não salvar se houver erro no carregamento
+                if df_hist is not None:
+                    novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
+                    conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
+                    st.success("Orçamento salvo!")
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
@@ -347,10 +350,12 @@ def main():
         if st.button("💾 Salvar Receita", use_container_width=True):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
-                conn.update(worksheet="Receitas", data=df_final)
-                st.success(f"Receita '{nome_produto_final}' salva!")
-                st.rerun()
+                # Proteção: só concatena se df_rec for carregado corretamente
+                if df_rec is not None:
+                    df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
+                    conn.update(worksheet="Receitas", data=df_final)
+                    st.success(f"Receita '{nome_produto_final}' salva!")
+                    st.rerun()
 
     with res2:
         st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
