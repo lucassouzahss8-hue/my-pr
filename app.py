@@ -55,7 +55,6 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
-# Ajuste: TTL alterado para 1 para estabilizar a busca e evitar resets ao digitar
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
@@ -164,7 +163,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            # Calculos de Resumo Financeiro
             v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
             v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
             v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
@@ -178,7 +176,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
 
-            # Interface de Resumo
             res1, res2 = st.columns([1.5, 1])
             with res1:
                 st.write("**Detalhamento de Taxas (Grupo)**")
@@ -205,7 +202,6 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
-                # Ajuste: Verificação para não salvar se houver erro no carregamento
                 if df_hist is not None:
                     novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
                     conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
@@ -276,6 +272,7 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
+        # Correção aqui: O widget de número de itens agora usa a versao_lista para resetar limpo
         n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"n_itens_widget_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
@@ -285,12 +282,12 @@ def main():
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}")
+                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, key=f"nome_{i}_{st.session_state.versao_lista}")
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
-                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
+                    qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01)
                 with c3:
-                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}")
+                    unid_uso = st.selectbox(f"Unid", ["g", "kg", "ml", "L", "unidade"], key=f"u_{i}_{st.session_state.versao_lista}")
                 
                 fator = 1.0
                 u_base = str(dados_item['unidade']).lower().strip()
@@ -306,17 +303,27 @@ def main():
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 with c5:
                     st.write("")
-                    if st.button("❌", key=f"del_ing_man_{i}"):
-                        for j in range(i, st.session_state.n_itens_receita - 1):
-                            st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
-                            st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
-                            st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
-                        last_idx = st.session_state.n_itens_receita - 1
-                        del st.session_state[f"nome_{last_idx}"]
-                        del st.session_state[f"qtd_{last_idx}"]
-                        del st.session_state[f"u_{last_idx}"]
+                    # RESOLUÇÃO DO PROBLEMA DO "X":
+                    # Em vez de tentar remover chaves do session_state (que causa o erro da foto),
+                    # apenas reorganizamos os dados e mudamos a 'versao_lista' para forçar o Streamlit
+                    # a renderizar os widgets novamente sem conflito.
+                    if st.button("❌", key=f"del_ing_man_{i}_{st.session_state.versao_lista}"):
+                        novos_dados = []
+                        for idx in range(st.session_state.n_itens_receita):
+                            if idx != i:
+                                novos_dados.append({
+                                    "nome": st.session_state.get(f"nome_{idx}_{st.session_state.versao_lista}"),
+                                    "qtd": st.session_state.get(f"qtd_{idx}_{st.session_state.versao_lista}"),
+                                    "u": st.session_state.get(f"u_{idx}_{st.session_state.versao_lista}")
+                                })
+                        
                         st.session_state.n_itens_receita -= 1
-                        st.session_state.versao_lista += 1 
+                        st.session_state.versao_lista += 1
+                        
+                        for idx, d in enumerate(novos_dados):
+                            st.session_state[f"nome_{idx}_{st.session_state.versao_lista}"] = d["nome"]
+                            st.session_state[f"qtd_{idx}_{st.session_state.versao_lista}"] = d["qtd"]
+                            st.session_state[f"u_{idx}_{st.session_state.versao_lista}"] = d["u"]
                         st.rerun()
 
     with col_dir:
@@ -350,7 +357,6 @@ def main():
         if st.button("💾 Salvar Receita", use_container_width=True):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                # Proteção: só concatena se df_rec for carregado corretamente
                 if df_rec is not None:
                     df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
                     conn.update(worksheet="Receitas", data=df_final)
