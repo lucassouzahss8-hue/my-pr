@@ -243,7 +243,7 @@ def main():
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
                 st.session_state.n_itens_receita = len(dados_rec)
-                st.session_state.versao_lista += 1 # Incrementar versão
+                st.session_state.versao_lista += 1 
                 for idx, row in enumerate(dados_rec.itertuples()):
                     st.session_state[f"nome_{idx}"] = row.ingrediente
                     st.session_state[f"qtd_{idx}"] = float(row.qtd)
@@ -273,33 +273,37 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
-        # Única alteração: Adição da chave dinâmica no n_itens
         n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"n_itens_widget_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
         lista_para_salvar = []
         if not df_ing.empty:
+            lista_nomes = df_ing['nome'].tolist() # Lista de nomes fora do loop para performance
             for i in range(st.session_state.n_itens_receita):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 with c1:
-                    lista_nomes = df_ing['nome'].tolist()
-                    val_nome = st.session_state.get(f"nome_{i}")
-                    idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
-                    # Única alteração: Chave agora depende da versao_lista
+                    # AJUSTE AQUI: Pega o valor do state e garante o index correto
+                    val_nome_state = st.session_state.get(f"nome_{i}", lista_nomes[0])
+                    try:
+                        idx_nome = lista_nomes.index(val_nome_state)
+                    except ValueError:
+                        idx_nome = 0
+                    
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_nome, key=f"nome_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"nome_{i}"] = escolha
                 
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
                     val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
-                    # Única alteração: Chave agora depende da versao_lista
                     qtd_usada = st.number_input(f"Qtd", value=val_qtd, key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01)
                     st.session_state[f"qtd_{i}"] = qtd_usada
                 with c3:
                     unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                    val_unid = st.session_state.get(f"u_{i}")
-                    idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
-                    # Única alteração: Chave agora depende da versao_lista
+                    val_unid = st.session_state.get(f"u_{i}", "g")
+                    try:
+                        idx_unid = unid_opcoes.index(val_unid)
+                    except ValueError:
+                        idx_unid = 0
                     unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"u_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"u_{i}"] = unid_uso
                 
