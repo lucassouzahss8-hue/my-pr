@@ -285,7 +285,7 @@ def main():
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    # CORREÇÃO: Busca o valor salvo para definir o índice correto no selectbox
+                    # CORREÇÃO DEFINITIVA: Verificação de existência e indexação
                     val_nome = st.session_state.get(f"nome_{i}")
                     idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_nome, key=f"nome_{i}")
@@ -295,7 +295,6 @@ def main():
                     qtd_usada = st.number_input(f"Qtd", key=f"qtd_{i}", step=0.01)
                 with c3:
                     unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                    # CORREÇÃO: Busca a unidade salva para definir o índice correto no selectbox
                     val_unid = st.session_state.get(f"u_{i}")
                     idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
                     unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"u_{i}")
@@ -315,16 +314,19 @@ def main():
                 with c5:
                     st.write("")
                     if st.button("❌", key=f"del_ing_man_{i}"):
+                        # Reorganiza o estado para que o próximo item assuma a posição do deletado
                         for j in range(i, st.session_state.n_itens_receita - 1):
                             st.session_state[f"nome_{j}"] = st.session_state[f"nome_{j+1}"]
                             st.session_state[f"qtd_{j}"] = st.session_state[f"qtd_{j+1}"]
                             st.session_state[f"u_{j}"] = st.session_state[f"u_{j+1}"]
-                        last_idx = st.session_state.n_itens_receita - 1
-                        del st.session_state[f"nome_{last_idx}"]
-                        del st.session_state[f"qtd_{last_idx}"]
-                        del st.session_state[f"u_{last_idx}"]
+                        
+                        # Remove o último do estado para evitar duplicatas ao reduzir o contador
+                        ultimo = st.session_state.n_itens_receita - 1
+                        if f"nome_{ultimo}" in st.session_state: del st.session_state[f"nome_{ultimo}"]
+                        if f"qtd_{ultimo}" in st.session_state: del st.session_state[f"qtd_{ultimo}"]
+                        if f"u_{ultimo}" in st.session_state: del st.session_state[f"u_{ultimo}"]
+                        
                         st.session_state.n_itens_receita -= 1
-                        st.session_state.versao_lista += 1 
                         st.rerun()
 
     with col_dir:
@@ -358,7 +360,6 @@ def main():
         if st.button("💾 Salvar Receita", use_container_width=True):
             if nome_produto_final:
                 df_nova = pd.DataFrame(lista_para_salvar)
-                # Proteção: só concatena se df_rec for carregado corretamente
                 if df_rec is not None:
                     df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
                     conn.update(worksheet="Receitas", data=df_final)
