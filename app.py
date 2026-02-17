@@ -135,8 +135,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         st.button("➕ Adicionar Item ao Grupo", use_container_width=True, on_click=adicionar_ao_carrinho)
         
         if st.session_state.carrinho_orc:
-            total_venda_bruta_acumulada = 0.0
             total_ingredientes_acumulados = 0.0
+            total_venda_acumulada_sem_extras = 0.0
             lista_pdf = []
             
             for idx, it in enumerate(st.session_state.carrinho_orc):
@@ -144,17 +144,14 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # --- AJUSTE DA FÓRMULA PARA IGUALAR AO PRECIFICADOR ---
-                v_custo_base_it = v_unit_custo_exibicao
-                v_quebra_it = v_custo_base_it * (perc_quebra/100)
-                v_despesas_it = v_custo_base_it * (perc_despesas/100)
-                v_custo_producao_it = v_custo_base_it + v_quebra_it + v_despesas_it
+                # --- CALCULO IGUAL AO PRECIFICADOR ---
+                v_quebra_it = v_unit_custo_exibicao * (perc_quebra / 100)
+                v_despesas_it = v_unit_custo_exibicao * (perc_despesas / 100)
+                v_custo_total_prod_it = v_unit_custo_exibicao + v_quebra_it + v_despesas_it
+                v_venda_it = v_custo_total_prod_it + (v_custo_total_prod_it * (margem_lucro / 100))
+                # --------------------------------------
                 
-                # Preço de venda seguindo a lógica do precificador: Custo Produção + Margem
-                v_venda_it = v_custo_producao_it + (v_custo_producao_it * (margem_lucro/100))
-                # ------------------------------------------------------
-                
-                total_venda_bruta_acumulada += v_venda_it
+                total_venda_acumulada_sem_extras += v_venda_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
                 
                 c[0].write(it['nome'])
@@ -171,19 +168,20 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
+            # Recalculando totais para o quadro de resumo
             v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
             v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
             v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
             v_custo_total_orc = v_cmv_orc + v_despesas_orc
             
-            v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
-            v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
-            total_geral_orc = v_subtotal + v_taxa_cartao_orc
+            # Preço Final igual ao Precificador: (Venda acumulada + Extras) + Taxas
+            preco_venda_base = total_venda_acumulada_sem_extras + emb_val 
+            v_taxa_cartao_orc = (preco_venda_base + frete_val) * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+            total_geral_orc = preco_venda_base + frete_val + v_taxa_cartao_orc
             
-            # Lucro Líquido Real (Venda Final - Custos - Frete - Taxas)
-            v_lucro_orc = total_geral_orc - v_custo_total_orc - frete_val - v_taxa_cartao_orc
+            v_lucro_orc = total_venda_acumulada_sem_extras - (total_ingredientes_acumulados + v_quebra_orc + v_despesas_orc)
             
-            cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
+            cmv_perc_orc = (v_cmv_orc / preco_venda_base * 100) if preco_venda_base > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
 
             res1, res2 = st.columns([1.5, 1])
@@ -287,7 +285,7 @@ def main():
         
         lista_para_salvar = []
         if not df_ing.empty:
-            lista_nomes = df_ing['nome'].tolist() # Lista de nomes fora do loop para performance
+            lista_nomes = df_ing['nome'].tolist() 
             for i in range(st.session_state.n_itens_receita):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 with c1:
