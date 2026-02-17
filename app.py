@@ -144,8 +144,15 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
-                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
+                # --- AJUSTE DA FÓRMULA PARA IGUALAR AO PRECIFICADOR ---
+                v_custo_base_it = v_unit_custo_exibicao
+                v_quebra_it = v_custo_base_it * (perc_quebra/100)
+                v_despesas_it = v_custo_base_it * (perc_despesas/100)
+                v_custo_producao_it = v_custo_base_it + v_quebra_it + v_despesas_it
+                
+                # Preço de venda seguindo a lógica do precificador: Custo Produção + Margem
+                v_venda_it = v_custo_producao_it + (v_custo_producao_it * (margem_lucro/100))
+                # ------------------------------------------------------
                 
                 total_venda_bruta_acumulada += v_venda_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
@@ -168,11 +175,13 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
             v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
             v_custo_total_orc = v_cmv_orc + v_despesas_orc
-            v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
+            
+            # Lucro Líquido Real (Venda Final - Custos - Frete - Taxas)
+            v_lucro_orc = total_geral_orc - v_custo_total_orc - frete_val - v_taxa_cartao_orc
             
             cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
@@ -282,7 +291,6 @@ def main():
             for i in range(st.session_state.n_itens_receita):
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 with c1:
-                    # AJUSTE AQUI: Pega o valor do state e garante o index correto
                     val_nome_state = st.session_state.get(f"nome_{i}", lista_nomes[0])
                     try:
                         idx_nome = lista_nomes.index(val_nome_state)
