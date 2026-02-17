@@ -107,8 +107,8 @@ def exportar_pdf(cliente, pedido, itens, total):
         pdf.cell(50, 10, f" R$ {it['venda']:.2f}", border=1, ln=True)
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 14)
-    # AJUSTE: Exibe o Total Final Geral
-    pdf.cell(200, 10, f"TOTAL FINAL COM TAXAS: R$ {total:.2f}", ln=True, align='R')
+    # AJUSTE SOLICITADO: Alterado de "TOTAL FINAL COM TAXAS" para "TOTAL FINAL"
+    pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def adicionar_ao_carrinho():
@@ -141,7 +141,6 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
             total_ingredientes_acumulados = 0.0
             lista_pdf = []
             
-            # Cálculo de taxa financeira rateada para aplicar em cada item no PDF
             taxa_perc = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             
             for idx, it in enumerate(st.session_state.carrinho_orc):
@@ -149,10 +148,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # CÁLCULO DE VENDA UNITÁRIA COM MARGEM
                 v_venda_it = (it['preco_puro'] * (1 + (margem_lucro/100))) * it['qtd']
-                
-                # Para o PDF, adicionamos a taxa de cartão proporcional ao item
                 v_venda_com_taxa_pdf = v_venda_it * (1 + taxa_perc)
                 
                 total_venda_bruta_acumulada += v_venda_it
@@ -204,7 +200,6 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
 
             st.write("")
             b_col1, b_col2, b_col3 = st.columns(3)
-            # PDF AGORA MOSTRA O TOTAL FINAL COM TUDO INCLUSO
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
