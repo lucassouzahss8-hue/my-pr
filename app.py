@@ -12,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilizacao CSS + PWA + Ajustes Mobile
+# 2. Estilizacao CSS
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
@@ -33,21 +33,11 @@ st.markdown("""
         color: white; 
     }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
-    
-    @media (max-width: 640px) {
-        .stButton button {
-            width: 100%;
-            height: 48px;
-            margin-bottom: 5px;
-        }
-        .titulo-planilha { font-size: 24px; }
-    }
     </style>
     """, unsafe_allow_html=True)
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# Inicializacao de estados
 if "carrinho_orc" not in st.session_state:
     st.session_state.carrinho_orc = []
 if "n_itens_receita" not in st.session_state:
@@ -55,7 +45,6 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
-# Funções de carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
@@ -118,7 +107,7 @@ def adicionar_ao_carrinho():
         st.session_state.carrinho_orc.append({"nome": nome, "qtd": qtd, "preco_puro": p_unit_puro})
 
 @st.fragment
-def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento):
+def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
@@ -144,7 +133,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # --- ALTERAÇÃO AQUI: Ignora completamente perc_quebra e perc_despesas ---
+                # CÁLCULO DIRETO SEM TAXAS ADICIONAIS
                 v_venda_it = (it['preco_puro'] * (1 + (margem_lucro/100))) * it['qtd']
                 
                 total_venda_bruta_acumulada += v_venda_it
@@ -164,23 +153,23 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            # --- ALTERAÇÃO AQUI: Removemos as taxas do custo para o cálculo do lucro do orçamento ---
-            v_cmv_orc = total_ingredientes_acumulados + emb_val
-            v_custo_total_orc = v_cmv_orc # Despesas e Quebras zeradas aqui
+            # CUSTO E LUCRO DO ORÇAMENTO SEM QUEBRA/DESPESAS
+            v_custo_total_orc = total_ingredientes_acumulados + emb_val
             v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             
-            cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
+            cmv_perc_orc = (v_custo_total_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
 
             res1, res2 = st.columns([1.5, 1])
             with res1:
-                st.write("**Detalhamento (Grupo)**")
+                st.write("**Detalhamento Financeiro**")
+                # TABELA REMOVIDA AS TAXAS DE QUEBRA E DESPESAS
                 df_res_orc = pd.DataFrame({
-                    "Item": ["Ingredientes", "Embalagem", "Frete", "Taxas Cartão"],
+                    "Item": ["Total Ingredientes", "Embalagens", "Frete", "Taxas Pagamento"],
                     "Valor": [f"R$ {total_ingredientes_acumulados:.2f}", f"R$ {emb_val:.2f}", f"R$ {frete_val:.2f}", f"R$ {v_taxa_cartao_orc:.2f}"]
                 })
                 st.table(df_res_orc)
@@ -188,28 +177,25 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             with res2:
                 st.markdown(f"""
                 <div style='background-color: #262730; padding: 20px; border-radius: 10px; border-left: 5px solid #1e3a8a;'>
-                    <p style='margin:0; font-size:13px; opacity:0.8; color:white;'>RESUMO DO ORÇAMENTO</p>
+                    <p style='margin:0; font-size:13px; opacity:0.8; color:white;'>RESUMO DO GRUPO</p>
                     <p style='margin:0; color:white;'><b>CMV:</b> <span style='color:{cor_cmv_orc}; font-weight:bold;'>{cmv_perc_orc:.1f}%</span></p>
-                    <p style='margin:0; color:white;'><b>Lucro Estimado:</b> <span style='color:#4ade80;'>R$ {v_lucro_orc:.2f}</span></p>
+                    <p style='margin:0; color:white;'><b>Lucro Líquido:</b> <span style='color:#4ade80;'>R$ {v_lucro_orc:.2f}</span></p>
                     <hr style='margin:10px 0; border-color:#4b5563;'>
                     <h2 style='margin:0; color:white; font-size:28px;'>R$ {total_geral_orc:.2f}</h2>
                 </div>
                 """, unsafe_allow_html=True)
 
-            st.write("")
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
-                if df_hist is not None:
-                    novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
-                    conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
-                    st.success("Orçamento salvo!")
+                novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
+                conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
+                st.success("Orçamento salvo!")
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
-
     with t2:
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
@@ -312,18 +298,13 @@ def main():
                 with c4:
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 with c5:
-                    st.write("")
                     if st.button("❌", key=f"del_ing_man_{i}"):
-                        for j in range(i, st.session_state.n_itens_receita - 1):
-                            st.session_state[f"nome_{j}"] = st.session_state.get(f"nome_{j+1}")
-                            st.session_state[f"qtd_{j}"] = st.session_state.get(f"qtd_{j+1}")
-                            st.session_state[f"u_{j}"] = st.session_state.get(f"u_{j+1}")
                         st.session_state.n_itens_receita -= 1
                         st.session_state.versao_lista += 1 
                         st.rerun()
 
     with col_dir:
-        st.subheader("⚙️ Adicionais")
+        st.subheader("⚙️ Adicionais (Apenas Precificador)")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
         perc_despesas = st.slider("Despesas Gerais (%)", 0, 100, 30)
         valor_embalagem_manual = st.number_input("Embalagem (R$)", min_value=0.0, value=0.0, key="emb_manual")
@@ -352,17 +333,16 @@ def main():
         st.table(df_resumo)
         if st.button("💾 Salvar Receita", use_container_width=True):
             if nome_produto_final:
-                df_nova = pd.DataFrame(lista_para_salvar)
-                if df_rec is not None:
-                    df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], df_nova], ignore_index=True)
-                    conn.update(worksheet="Receitas", data=df_final)
-                    st.success(f"Receita '{nome_produto_final}' salva!")
-                    st.rerun()
+                df_final = pd.concat([df_rec[df_rec['nome_receita'] != nome_produto_final], pd.DataFrame(lista_para_salvar)], ignore_index=True)
+                conn.update(worksheet="Receitas", data=df_final)
+                st.success(f"Receita '{nome_produto_final}' salva!")
+                st.rerun()
 
     with res2:
-        st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p></div>", unsafe_allow_html=True)
 
-    secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento)
+    # CHAMADA DA SEÇÃO DE ORÇAMENTO PASSANDO APENAS O QUE É NECESSÁRIO
+    secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento)
 
 if __name__ == "__main__":
     main()
