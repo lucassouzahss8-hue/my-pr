@@ -135,8 +135,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
         st.button("➕ Adicionar Item ao Grupo", use_container_width=True, on_click=adicionar_ao_carrinho)
         
         if st.session_state.carrinho_orc:
+            total_venda_bruta_acumulada = 0.0
             total_ingredientes_acumulados = 0.0
-            total_venda_acumulada_bruta = 0.0
             lista_pdf = []
             
             for idx, it in enumerate(st.session_state.carrinho_orc):
@@ -144,15 +144,10 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # --- CALCULO CORRIGIDO PARA BATER COM O PRECIFICADOR ---
-                # 1. Custo Puro do Item
-                v_custo_it = v_unit_custo_exibicao
-                # 2. Adiciona Quebra e Despesas (sobre o custo puro)
-                v_custo_producao_it = v_custo_it + (v_custo_it * (perc_quebra/100)) + (v_custo_it * (perc_despesas/100))
-                # 3. Preço de Venda (Custo Produção + Margem de Lucro)
-                v_venda_it = v_custo_producao_it * (1 + (margem_lucro/100))
+                v_custo_producao_unit = it['preco_puro'] + (it['preco_puro'] * (perc_quebra/100)) + (it['preco_puro'] * (perc_despesas/100))
+                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
                 
-                total_venda_acumulada_bruta += v_venda_it
+                total_venda_bruta_acumulada += v_venda_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
                 
                 c[0].write(it['nome'])
@@ -169,22 +164,17 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            # Recalculando totais para o resumo
             v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
             v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
             v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
             v_custo_total_orc = v_cmv_orc + v_despesas_orc
+            v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             
-            # Preço Final seguindo a lógica do Precificador
-            # (Venda acumulada + Embalagem) + Frete + Taxas Financeiras
-            # Nota: O precificador aplica lucro sobre a embalagem. Aqui somamos a venda bruta ja com lucro.
-            v_subtotal = total_venda_acumulada_bruta + emb_val + (emb_val * (margem_lucro/100)) + frete_val
+            v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             
-            v_lucro_orc = total_geral_orc - v_custo_total_orc - frete_val - v_taxa_cartao_orc
-            
-            cmv_perc_orc = (v_cmv_orc / total_geral_orc * 100) if total_geral_orc > 0 else 0
+            cmv_perc_orc = (v_cmv_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
 
             res1, res2 = st.columns([1.5, 1])
@@ -283,6 +273,7 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
     with col_esq:
         st.subheader("🛒 Ingredientes")
+        # Única alteração: Adição da chave dinâmica no n_itens
         n_itens = st.number_input("Número de itens:", min_value=1, value=st.session_state.n_itens_receita, key=f"n_itens_widget_{st.session_state.versao_lista}")
         st.session_state.n_itens_receita = n_itens 
         
@@ -294,18 +285,21 @@ def main():
                     lista_nomes = df_ing['nome'].tolist()
                     val_nome = st.session_state.get(f"nome_{i}")
                     idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
+                    # Única alteração: Chave agora depende da versao_lista
                     escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_nome, key=f"nome_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"nome_{i}"] = escolha
                 
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
                     val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
+                    # Única alteração: Chave agora depende da versao_lista
                     qtd_usada = st.number_input(f"Qtd", value=val_qtd, key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01)
                     st.session_state[f"qtd_{i}"] = qtd_usada
                 with c3:
                     unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
                     val_unid = st.session_state.get(f"u_{i}")
                     idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
+                    # Única alteração: Chave agora depende da versao_lista
                     unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"u_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"u_{i}"] = unid_uso
                 
