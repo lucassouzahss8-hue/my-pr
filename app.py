@@ -98,7 +98,8 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.set_text_color(255, 255, 255)
     pdf.cell(100, 10, " Produto", border=1, fill=True)
     pdf.cell(40, 10, " Qtd", border=1, fill=True)
-    pdf.cell(50, 10, " Valor Total", border=1, fill=True, ln=True) # Alterado label para clareza
+    # AJUSTE: Onde era Subtotal agora é Valor Total (com margem e taxas)
+    pdf.cell(50, 10, " Valor Total", border=1, fill=True, ln=True)
     pdf.set_text_color(0, 0, 0)
     for it in itens:
         pdf.cell(100, 10, f" {it['nome']}", border=1)
@@ -106,7 +107,8 @@ def exportar_pdf(cliente, pedido, itens, total):
         pdf.cell(50, 10, f" R$ {it['venda']:.2f}", border=1, ln=True)
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(200, 10, f"TOTAL FINAL COM TAXAS: R$ {total:.2f}", ln=True, align='R') # Reflete o total com taxas
+    # AJUSTE: Exibe o Total Final Geral
+    pdf.cell(200, 10, f"TOTAL FINAL COM TAXAS: R$ {total:.2f}", ln=True, align='R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def adicionar_ao_carrinho():
@@ -118,7 +120,7 @@ def adicionar_ao_carrinho():
         st.session_state.carrinho_orc.append({"nome": nome, "qtd": qtd, "preco_puro": p_unit_puro})
 
 @st.fragment
-def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento):
+def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
@@ -139,20 +141,22 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             total_ingredientes_acumulados = 0.0
             lista_pdf = []
             
+            # Cálculo de taxa financeira rateada para aplicar em cada item no PDF
+            taxa_perc = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+            
             for idx, it in enumerate(st.session_state.carrinho_orc):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # CÁLCULO IDENTICO AO PRECIFICADOR PARA CUSTO DE PRODUÇÃO
-                v_quebra_it = it['preco_puro'] * (perc_quebra / 100)
-                v_despesas_it = it['preco_puro'] * (perc_despesas / 100)
-                v_custo_producao_unit = it['preco_puro'] + v_quebra_it + v_despesas_it
+                # CÁLCULO DE VENDA UNITÁRIA COM MARGEM
+                v_venda_it = (it['preco_puro'] * (1 + (margem_lucro/100))) * it['qtd']
                 
-                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
+                # Para o PDF, adicionamos a taxa de cartão proporcional ao item
+                v_venda_com_taxa_pdf = v_venda_it * (1 + taxa_perc)
                 
                 total_venda_bruta_acumulada += v_venda_it
-                lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
+                lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_com_taxa_pdf})
                 
                 c[0].write(it['nome'])
                 c[1].write(f"x{it['qtd']}")
@@ -168,18 +172,15 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            v_quebra_total_orc = total_ingredientes_acumulados * (perc_quebra / 100)
-            v_cmv_orc_valor = total_ingredientes_acumulados + v_quebra_total_orc + emb_val
+            v_custo_total_orc = total_ingredientes_acumulados + emb_val
+            v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
-            v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
+            v_taxa_cartao_orc = v_subtotal * taxa_perc
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             
-            cmv_perc_orc = (v_cmv_orc_valor / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
+            cmv_perc_orc = (v_custo_total_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
-            
-            v_despesas_total_orc = total_ingredientes_acumulados * (perc_despesas / 100)
-            v_lucro_orc = total_venda_bruta_acumulada - (v_cmv_orc_valor + v_despesas_total_orc)
 
             res1, res2 = st.columns([1.5, 1])
             with res1:
@@ -203,7 +204,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
 
             st.write("")
             b_col1, b_col2, b_col3 = st.columns(3)
-            # PDF AGORA RECEBE O TOTAL GERAL JÁ COM AS TAXAS
+            # PDF AGORA MOSTRA O TOTAL FINAL COM TUDO INCLUSO
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
@@ -367,8 +368,7 @@ def main():
     with res2:
         st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
 
-    # CHAMADA DA SEÇÃO COM AS TAXAS PARA QUE O CMV SEJA IDÊNTICO
-    secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento)
+    secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento)
 
 if __name__ == "__main__":
     main()
