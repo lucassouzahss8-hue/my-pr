@@ -55,7 +55,7 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
-# Funções de carregamento (Originais)
+# Funções de carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
@@ -144,9 +144,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # ALTERAÇÃO REALIZADA AQUI: Removido perc_quebra e perc_despesas do custo unitário
-                v_custo_producao_unit = it['preco_puro'] 
-                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
+                # --- ALTERAÇÃO AQUI: Ignora completamente perc_quebra e perc_despesas ---
+                v_venda_it = (it['preco_puro'] * (1 + (margem_lucro/100))) * it['qtd']
                 
                 total_venda_bruta_acumulada += v_venda_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
@@ -165,10 +164,9 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            v_quebra_orc = total_ingredientes_acumulados * (perc_quebra / 100)
-            v_despesas_orc = total_ingredientes_acumulados * (perc_despesas / 100)
-            v_cmv_orc = total_ingredientes_acumulados + v_quebra_orc + emb_val
-            v_custo_total_orc = v_cmv_orc + v_despesas_orc
+            # --- ALTERAÇÃO AQUI: Removemos as taxas do custo para o cálculo do lucro do orçamento ---
+            v_cmv_orc = total_ingredientes_acumulados + emb_val
+            v_custo_total_orc = v_cmv_orc # Despesas e Quebras zeradas aqui
             v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
@@ -180,10 +178,10 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
 
             res1, res2 = st.columns([1.5, 1])
             with res1:
-                st.write("**Detalhamento de Taxas (Grupo)**")
+                st.write("**Detalhamento (Grupo)**")
                 df_res_orc = pd.DataFrame({
-                    "Item": ["Ingredientes", "Quebra", "Despesas Gerais", "Embalagem", "Frete", "Taxas"],
-                    "Valor": [f"R$ {total_ingredientes_acumulados:.2f}", f"R$ {v_quebra_orc:.2f}", f"R$ {v_despesas_orc:.2f}", f"R$ {emb_val:.2f}", f"R$ {frete_val:.2f}", f"R$ {v_taxa_cartao_orc:.2f}"]
+                    "Item": ["Ingredientes", "Embalagem", "Frete", "Taxas Cartão"],
+                    "Valor": [f"R$ {total_ingredientes_acumulados:.2f}", f"R$ {emb_val:.2f}", f"R$ {frete_val:.2f}", f"R$ {v_taxa_cartao_orc:.2f}"]
                 })
                 st.table(df_res_orc)
             
@@ -192,7 +190,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 <div style='background-color: #262730; padding: 20px; border-radius: 10px; border-left: 5px solid #1e3a8a;'>
                     <p style='margin:0; font-size:13px; opacity:0.8; color:white;'>RESUMO DO ORÇAMENTO</p>
                     <p style='margin:0; color:white;'><b>CMV:</b> <span style='color:{cor_cmv_orc}; font-weight:bold;'>{cmv_perc_orc:.1f}%</span></p>
-                    <p style='margin:0; color:white;'><b>Lucro Líquido:</b> <span style='color:#4ade80;'>R$ {v_lucro_orc:.2f}</span></p>
+                    <p style='margin:0; color:white;'><b>Lucro Estimado:</b> <span style='color:#4ade80;'>R$ {v_lucro_orc:.2f}</span></p>
                     <hr style='margin:10px 0; border-color:#4b5563;'>
                     <h2 style='margin:0; color:white; font-size:28px;'>R$ {total_geral_orc:.2f}</h2>
                 </div>
@@ -211,6 +209,7 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
                 st.rerun()
+
     with t2:
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
