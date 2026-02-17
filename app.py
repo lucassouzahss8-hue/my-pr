@@ -118,7 +118,7 @@ def adicionar_ao_carrinho():
         st.session_state.carrinho_orc.append({"nome": nome, "qtd": qtd, "preco_puro": p_unit_puro})
 
 @st.fragment
-def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento):
+def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
@@ -144,12 +144,8 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
                 
-                # CÁLCULO IDENTICO AO PRECIFICADOR PARA CUSTO DE PRODUÇÃO
-                v_quebra_it = it['preco_puro'] * (perc_quebra / 100)
-                v_despesas_it = it['preco_puro'] * (perc_despesas / 100)
-                v_custo_producao_unit = it['preco_puro'] + v_quebra_it + v_despesas_it
-                
-                v_venda_it = (v_custo_producao_unit * (1 + (margem_lucro/100))) * it['qtd']
+                # CÁLCULO DIRETO SEM AS TAXAS DE QUEBRA E DESPESAS
+                v_venda_it = (it['preco_puro'] * (1 + (margem_lucro/100))) * it['qtd']
                 
                 total_venda_bruta_acumulada += v_venda_it
                 lista_pdf.append({"nome": it['nome'], "qtd": it['qtd'], "venda": v_venda_it})
@@ -168,24 +164,21 @@ def secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credi
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
-            # CMV CALCULADO COM QUEBRA E EMBALAGEM (IDENTICO AO PRECIFICADOR)
-            v_quebra_total_orc = total_ingredientes_acumulados * (perc_quebra / 100)
-            v_cmv_orc_valor = total_ingredientes_acumulados + v_quebra_total_orc + emb_val
+            # CÁLCULOS TOTAIS REMOVENDO AS TAXAS
+            v_custo_total_orc = total_ingredientes_acumulados + emb_val
+            v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
             v_taxa_cartao_orc = v_subtotal * (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             total_geral_orc = v_subtotal + v_taxa_cartao_orc
             
-            # CMV % IDENTICO: (INGREDIENTES + QUEBRA + EMBALAGEM) / VALOR_VENDA_PRODUTOS
-            cmv_perc_orc = (v_cmv_orc_valor / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
+            cmv_perc_orc = (v_custo_total_orc / total_venda_bruta_acumulada * 100) if total_venda_bruta_acumulada > 0 else 0
             cor_cmv_orc = "#4ade80" if cmv_perc_orc <= 35 else "#facc15" if cmv_perc_orc <= 45 else "#f87171"
-            
-            v_despesas_total_orc = total_ingredientes_acumulados * (perc_despesas / 100)
-            v_lucro_orc = total_venda_bruta_acumulada - (v_cmv_orc_valor + v_despesas_total_orc)
 
             res1, res2 = st.columns([1.5, 1])
             with res1:
                 st.write("**Detalhamento de Valores (Orçamento)**")
+                # TABELA ATUALIZADA: REMOVIDO QUEBRA E DESPESAS
                 df_res_orc = pd.DataFrame({
                     "Item": ["Ingredientes", "Embalagem", "Frete", "Taxas Pagamento"],
                     "Valor": [f"R$ {total_ingredientes_acumulados:.2f}", f"R$ {emb_val:.2f}", f"R$ {frete_val:.2f}", f"R$ {v_taxa_cartao_orc:.2f}"]
@@ -368,8 +361,8 @@ def main():
     with res2:
         st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
 
-    # CHAMADA DA SEÇÃO COM AS TAXAS PARA QUE O CMV SEJA IDÊNTICO
-    secao_orcamento(df_ing, perc_quebra, perc_despesas, margem_lucro, taxa_credito_input, forma_pagamento)
+    # CHAMADA DA SEÇÃO DE ORÇAMENTO SEM PASSAR AS TAXAS DE QUEBRA/DESPESAS
+    secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento)
 
 if __name__ == "__main__":
     main()
