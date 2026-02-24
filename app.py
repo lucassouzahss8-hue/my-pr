@@ -98,7 +98,6 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.set_text_color(255, 255, 255)
     pdf.cell(100, 10, " Produto", border=1, fill=True)
     pdf.cell(40, 10, " Qtd", border=1, fill=True)
-    # AJUSTE: Onde era Subtotal agora é Valor Total (com margem e taxas)
     pdf.cell(50, 10, " Valor Total", border=1, fill=True, ln=True)
     pdf.set_text_color(0, 0, 0)
     for it in itens:
@@ -107,7 +106,6 @@ def exportar_pdf(cliente, pedido, itens, total):
         pdf.cell(50, 10, f" R$ {it['venda']:.2f}", border=1, ln=True)
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 14)
-    # AJUSTE SOLICITADO: Alterado de "TOTAL FINAL COM TAXAS" para "TOTAL FINAL"
     pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
@@ -228,7 +226,9 @@ def main():
 
     with st.sidebar:
         st.header("⚙️ Ajuste de Taxas")
-        taxa_credito_input = st.number_input("Taxa Crédito (%)", value=3.19, step=0.01)
+        # TAXA FIXA EM 6%
+        taxa_credito_input = 6.0
+        st.write(f"Taxa Crédito Fixa: {taxa_credito_input}%")
         st.divider()
         km_gratis = st.number_input("KM Isentos", value=5)
         valor_por_km = st.number_input("R$ por KM adicional", value=2.0, step=0.1)
