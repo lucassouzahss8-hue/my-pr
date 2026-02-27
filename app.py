@@ -214,7 +214,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
             
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
-                if df_hist is not None:
+            if df_hist is not None:
                     itens_str = json.dumps(st.session_state.carrinho_orc)
                     novo_reg = pd.DataFrame([{
                         "Data": data_orc.strftime("%d/%m/%Y"), 
@@ -233,33 +233,33 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 st.rerun()
 
     with t2:
-    df_salvos = carregar_historico_orc()
-    if not df_salvos.empty:
-        for i, row in df_salvos.iterrows():
-            c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 2.5, 1.5, 0.5, 0.5])
-            c1.write(row.get('Data', ''))
-            c2.write(row.get('Cliente', ''))
-            c3.write(row.get('Pedido', ''))
-            c4.write(row.get('Valor_Final', ''))
-            
-            # BOTÃO DE EDITAR (Onde o erro acontece)
-            if c5.button("📝", key=f"edit_h_{i}"):
-                try:
-                    # Passo 1: Limpar ou preparar o JSON
-                    raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
-                    
-                    # Passo 2: ATUALIZAR O ESTADO ANTES DE QUALQUER COISA
-                    st.session_state["carrinho_orc"] = json.loads(raw_json)
-                    st.session_state["cli_orc"] = row.get('Cliente', '')
-                    st.session_state["grupo_orc"] = row.get('Pedido', '')
-                    
-                    # Passo 3: O PULO DO GATO
-                    # Forçamos o recarregamento total para que os widgets na aba "Criar Novo"
-                    # já nasçam com os valores que acabamos de setar.
-                    st.rerun() 
-                    
-                except Exception as e:
-                    st.error(f"Erro ao processar dados: {e}")
+        df_salvos = carregar_historico_orc()
+        if not df_salvos.empty:
+            for i, row in df_salvos.iterrows():
+                c1, c2, c3, c4, c5, c6 = st.columns([1.5, 2, 2.5, 1.5, 0.5, 0.5])
+                c1.write(row.get('Data', ''))
+                c2.write(row.get('Cliente', ''))
+                c3.write(row.get('Pedido', ''))
+                c4.write(row.get('Valor_Final', ''))
+                
+                # BOTÃO DE EDITAR (Onde o erro acontece)
+                if c5.button("📝", key=f"edit_h_{i}"):
+                    try:
+                        # Passo 1: Limpar ou preparar o JSON
+                        raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
+                        
+                        # Passo 2: ATUALIZAR O ESTADO ANTES DE QUALQUER COISA
+                        st.session_state["carrinho_orc"] = json.loads(raw_json)
+                        st.session_state["cli_orc"] = row.get('Cliente', '')
+                        st.session_state["grupo_orc"] = row.get('Pedido', '')
+                        
+                        # Passo 3: O PULO DO GATO
+                        # Forçamos o recarregamento total para que os widgets na aba "Criar Novo"
+                        # já nasçam com os valores que acabamos de setar.
+                        st.rerun() 
+                        
+                    except Exception as e:
+                        st.error(f"Erro ao processar dados: {e}")
 
             if c6.button("🗑️", key=f"del_h_{i}"):
                 conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i))
