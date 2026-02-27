@@ -123,7 +123,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
-    with t1:
+        with t1:
             # Busca valores de variáveis temporárias para evitar o erro de 'instantiated widget'
             val_cli = st.session_state.get("temp_cliente", "")
             val_ped = st.session_state.get("temp_pedido", "")
