@@ -186,7 +186,20 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 })
                 st.table(df_res_orc)
             
-            with res2:
+      with res2:
+        # Criamos o HTML separadamente para evitar erros de sintaxe com f-strings complexas
+        html_card = f"""
+        <div class='resultado-box'>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
+            <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
+            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
+            <hr style='border-color: #4b5563;'>
+            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
+            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
+            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
+        </div>
+        """
+        st.markdown(html_card, unsafe_allow_html=True)
                 st.markdown(f"""
                 <div style='background-color: #262730; padding: 20px; border-radius: 10px; border-left: 5px solid #1e3a8a;'>
                     <p style='margin:0; font-size:13px; opacity:0.8; color:white;'>RESUMO DO ORÇAMENTO</p>
