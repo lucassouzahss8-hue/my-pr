@@ -123,18 +123,18 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     st.divider()
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
-        with t1:
-                # Busca valores de variáveis temporárias para evitar o erro de 'instantiated widget'
-                val_cli = st.session_state.get("temp_cliente", "")
-                val_ped = st.session_state.get("temp_pedido", "")
+    
+    with t1:
+        # Indentação corrigida aqui
+        val_cli = st.session_state.get("temp_cliente", "")
+        val_ped = st.session_state.get("temp_pedido", "")
+
+        c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
+        nome_cliente = c_cli1.text_input("Nome do Cliente", value=val_cli, key="cli_orc")
+        tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
+        data_orc = c_cli3.date_input("Data", value=date.today(), key="data_orc")
+        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", value=val_ped, key="grupo_orc")
         
-                c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
-                # Usamos 'value' em vez de tentar forçar o st.session_state['cli_orc']
-                nome_cliente = c_cli1.text_input("Nome do Cliente", value=val_cli, key="cli_orc")
-                tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
-                data_orc = c_cli3.date_input("Data", value=date.today(), key="data_orc")
-                nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", value=val_ped, key="grupo_orc")
-            
         c_it1, c_it2 = st.columns([3, 1])
         item_escolhido = c_it1.selectbox("Selecione o Item:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
         qtd_orc = c_it2.number_input("Qtd", min_value=1, value=1, key="q_orc_input")
@@ -235,12 +235,8 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                     try:
                         raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
                         st.session_state.carrinho_orc = json.loads(raw_json)
-                        
-                        # EM VEZ DE: st.session_state.cli_orc = ... (que causa o erro)
-                        # FAZEMOS:
                         st.session_state["temp_cliente"] = row.get('Cliente', '')
                         st.session_state["temp_pedido"] = row.get('Pedido', '')
-                        
                         st.success("Carregado! Clique na aba 'Criar Novo'.")
                         st.rerun()
                     except Exception as e:
@@ -391,6 +387,7 @@ def main():
                     st.rerun()
 
     with res2:
+        # CORREÇÃO: Usando chaves duplas {{ }} para o CSS não quebrar a f-string do Python
         st.markdown(f"""
             <div class='resultado-box'>
                 <p style='margin:0; font-size:14px; {{ opacity: 0.8; }}'>VALOR SUGERIDO</p>
@@ -402,6 +399,7 @@ def main():
                 <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
             </div>
         """, unsafe_allow_html=True)
+    
     secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento)
 
 if __name__ == "__main__":
