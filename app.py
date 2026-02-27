@@ -229,16 +229,16 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 c4.write(row.get('Valor_Final', ''))
                 
                 # Botão Editar
-                    if c5.button("📝", key=f"edit_h_{i}"):
-                        import json
-                        try:
-                            # Garante que o JSON use aspas duplas antes de carregar
-                            raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
-                            st.session_state.carrinho_orc = json.loads(raw_json)
-                            st.session_state.cli_orc = row.get('Cliente', '')
-                            st.session_state.grupo_orc = row.get('Pedido', '')
-                            st.success("Orçamento carregado!")
-                            st.rerun()
+                if c5.button("📝", key=f"edit_h_{i}"):
+                    import json
+                    try:
+                        # Garante que o JSON use aspas duplas antes de carregar
+                        raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
+                        st.session_state.carrinho_orc = json.loads(raw_json)
+                        st.session_state.cli_orc = row.get('Cliente', '')
+                        st.session_state.grupo_orc = row.get('Pedido', '')
+                        st.success("Orçamento carregado!")
+                        st.rerun()
                         except Exception as e:
                             st.error(f"Erro ao carregar detalhes: {e}")
 
