@@ -239,8 +239,8 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                         st.session_state.grupo_orc = row.get('Pedido', '')
                         st.success("Orçamento carregado!")
                         st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao carregar detalhes: {e}")
+                    except Exception as e:
+                        st.error(f"Erro ao carregar detalhes: {e}")
 
                 # Botão Deletar
                 if c6.button("🗑️", key=f"del_h_{i}"):
