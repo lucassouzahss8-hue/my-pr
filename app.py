@@ -56,6 +56,12 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
+# CORREÇÃO: Inicializar as chaves dos widgets para evitar erro de Value vs Key
+if "cli_orc" not in st.session_state:
+    st.session_state["cli_orc"] = ""
+if "grupo_orc" not in st.session_state:
+    st.session_state["grupo_orc"] = ""
+
 # Funções de carregamento
 def carregar_ingredientes():
     try:
@@ -125,14 +131,13 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
     
     with t1:
-        val_cli = st.session_state.get("temp_cliente", "")
-        val_ped = st.session_state.get("temp_pedido", "")
-        
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
-        nome_cliente = c_cli1.text_input("Nome do Cliente", value=val_cli, key="cli_orc")
+        # CORREÇÃO: Removido o parâmetro 'value'. O Streamlit usará o valor presente em st.session_state["cli_orc"]
+        nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc")
         tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
         data_orc = c_cli3.date_input("Data", value=date.today(), key="data_orc")
-        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", value=val_ped, key="grupo_orc")
+        # CORREÇÃO: Removido o parâmetro 'value' para o Pedido também
+        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", key="grupo_orc")
         
         c_it1, c_it2 = st.columns([3, 1])
         item_escolhido = c_it1.selectbox("Selecione o Item:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
@@ -215,8 +220,8 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                     st.success("Orçamento salvo!")
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
-                st.session_state["temp_cliente"] = ""
-                st.session_state["temp_pedido"] = ""
+                st.session_state["cli_orc"] = "" # Altera diretamente a key
+                st.session_state["grupo_orc"] = "" # Altera diretamente a key
                 st.rerun()
 
     with t2:
@@ -233,8 +238,9 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                     try:
                         raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
                         st.session_state.carrinho_orc = json.loads(raw_json)
-                        st.session_state["temp_cliente"] = row.get('Cliente', '')
-                        st.session_state["temp_pedido"] = row.get('Pedido', '')
+                        # ATUALIZAÇÃO DIRETA NAS KEYS
+                        st.session_state["cli_orc"] = row.get('Cliente', '')
+                        st.session_state["grupo_orc"] = row.get('Pedido', '')
                         st.success("Carregado! Clique na aba 'Criar Novo'.")
                         st.rerun()
                     except:
@@ -387,7 +393,7 @@ def main():
     with res2:
         st.markdown(f"""
             <div class='resultado-box'>
-                <p style='margin:0; font-size:14px; {{ opacity: 0.8; }}'>VALOR SUGERIDO</p>
+                <p style='margin:0; font-size:14px;'>VALOR SUGERIDO</p>
                 <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
                 <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
                 <hr style='border-color: #4b5563;'>
