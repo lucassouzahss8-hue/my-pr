@@ -131,12 +131,15 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
     
     with t1:
+        # Pega os valores do estado ou vazio se não existirem
+        # Usamos uma variável intermediária para não forçar o 'value' diretamente no widget
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
-        # CORREÇÃO: Removido o parâmetro 'value'. O Streamlit usará o valor presente em st.session_state["cli_orc"]
+        
+        # O segredo para não dar erro: O widget usa a key, 
+        # e o carregamento (no t2) acontece ANTES do rerun.
         nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc")
         tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
         data_orc = c_cli3.date_input("Data", value=date.today(), key="data_orc")
-        # CORREÇÃO: Removido o parâmetro 'value' para o Pedido também
         nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", key="grupo_orc")
         
         c_it1, c_it2 = st.columns([3, 1])
@@ -150,7 +153,8 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
             lista_pdf = []
             taxa_perc = (taxa_credito_input / 100) if forma_pagamento == "Crédito" else 0.0
             
-            for idx, it in enumerate(st.session_state.carrinho_orc):
+            # Criamos uma cópia para iterar e permitir deleção segura
+            for idx, it in enumerate(list(st.session_state.carrinho_orc)):
                 c = st.columns([3, 1, 1.5, 1.5, 2, 0.5])
                 v_unit_custo_exibicao = it['preco_puro'] * it['qtd']
                 total_ingredientes_acumulados += v_unit_custo_exibicao
@@ -173,6 +177,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
             frete_val = f1.number_input("Frete Total (R$)", value=0.0, key="frete_orc")
             emb_val = f2.number_input("Embalagem Total (R$)", value=0.0, key="emb_orc")
             
+            # Cálculos de rodapé
             v_custo_total_orc = total_ingredientes_acumulados + emb_val
             v_lucro_orc = total_venda_bruta_acumulada - v_custo_total_orc
             v_subtotal = total_venda_bruta_acumulada + frete_val + emb_val
@@ -203,8 +208,10 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 """, unsafe_allow_html=True)
 
             b_col1, b_col2, b_col3 = st.columns(3)
+            # PDF utiliza os valores calculados acima
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
+            
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
                 if df_hist is not None:
@@ -218,10 +225,11 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                     }])
                     conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
                     st.success("Orçamento salvo!")
+            
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
-                st.session_state["cli_orc"] = "" # Altera diretamente a key
-                st.session_state["grupo_orc"] = "" # Altera diretamente a key
+                st.session_state.cli_orc = ""
+                st.session_state.grupo_orc = ""
                 st.rerun()
 
     with t2:
@@ -236,15 +244,19 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 
                 if c5.button("📝", key=f"edit_h_{i}"):
                     try:
+                        # 1. Carrega os dados primeiro
                         raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
                         st.session_state.carrinho_orc = json.loads(raw_json)
-                        # ATUALIZAÇÃO DIRETA NAS KEYS
+                        
+                        # 2. Atualiza o estado das chaves ANTES do rerun
+                        # Isso evita o erro de "modified after instantiated"
                         st.session_state["cli_orc"] = row.get('Cliente', '')
                         st.session_state["grupo_orc"] = row.get('Pedido', '')
+                        
                         st.success("Carregado! Clique na aba 'Criar Novo'.")
                         st.rerun()
-                    except:
-                        st.error("Erro ao carregar itens.")
+                    except Exception as e:
+                        st.error(f"Erro ao carregar itens: {e}")
 
                 if c6.button("🗑️", key=f"del_h_{i}"):
                     conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i))
