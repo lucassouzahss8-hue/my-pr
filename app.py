@@ -225,10 +225,10 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 
                 if c5.button("📝", key=f"edit_h_{i}"):
                     try:
-                        # Limpa aspas simples que o GSheets as vezes coloca
+                        # Limpa aspas simples que o GSheets às vezes coloca
                         raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
                         st.session_state.carrinho_orc = json.loads(raw_json)
-                        # Atualiza o state sem conflitar com o widget já instanciado
+                        # Atualiza o state usando a chave para evitar conflito com widgets já instanciados
                         st.session_state["cli_orc"] = row.get('Cliente', '')
                         st.session_state["grupo_orc"] = row.get('Pedido', '')
                         st.success("Carregado! Vá para a aba 'Criar Novo'.")
@@ -381,7 +381,7 @@ def main():
                     st.rerun()
 
     with res2:
-        # AQUI FOI A CORRECAO DO OPACITY (CHAVES DUPLAS)
+        # CORREÇÃO: Usando chaves duplas {{ }} para escapar o estilo CSS dentro da f-string
         st.markdown(f"""
             <div class='resultado-box'>
                 <p style='margin:0; font-size:14px; {{ opacity: 0.8; }}'>VALOR SUGERIDO</p>
