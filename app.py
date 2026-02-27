@@ -3,7 +3,6 @@ import pandas as pd
 from streamlit_gsheets import GSheetsConnection
 from datetime import date
 from fpdf import FPDF
-import json
 
 # 1. Configuracao da Pagina
 st.set_page_config(
@@ -56,7 +55,7 @@ if "n_itens_receita" not in st.session_state:
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
 
-# Funções de carregamento (Originais)
+# Funções de carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
@@ -80,9 +79,9 @@ def carregar_historico_orc():
         if df is not None:
             df.columns = [c.replace(" ", "_") for c in df.columns]
             return df
-        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final', 'Detalhes_JSON'])
+        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
     except:
-        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final', 'Detalhes_JSON'])
+        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final'])
 
 def exportar_pdf(cliente, pedido, itens, total):
     pdf = FPDF()
@@ -186,20 +185,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 })
                 st.table(df_res_orc)
             
-      with res2:
-        # Criamos o HTML separadamente para evitar erros de sintaxe com f-strings complexas
-        html_card = f"""
-        <div class='resultado-box'>
-            <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
-            <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
-            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
-            <hr style='border-color: #4b5563;'>
-            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
-            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
-            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
-        </div>
-        """
-        st.markdown(html_card, unsafe_allow_html=True)
+            with res2:
                 st.markdown(f"""
                 <div style='background-color: #262730; padding: 20px; border-radius: 10px; border-left: 5px solid #1e3a8a;'>
                     <p style='margin:0; font-size:13px; opacity:0.8; color:white;'>RESUMO DO ORÇAMENTO</p>
@@ -217,15 +203,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
                 if df_hist is not None:
-                    # Salva os itens do carrinho em formato JSON para poder editar depois
-                    detalhes_json = json.dumps(st.session_state.carrinho_orc)
-                    novo_reg = pd.DataFrame([{
-                        "Data": data_orc.strftime("%d/%m/%Y"), 
-                        "Cliente": nome_cliente, 
-                        "Pedido": nome_grupo_pedido, 
-                        "Valor_Final": f"R$ {total_geral_orc:.2f}",
-                        "Detalhes_JSON": detalhes_json
-                    }])
+                    novo_reg = pd.DataFrame([{"Data": data_orc.strftime("%d/%m/%Y"), "Cliente": nome_cliente, "Pedido": nome_grupo_pedido, "Valor_Final": f"R$ {total_geral_orc:.2f}"}])
                     conn.update(worksheet="Orcamentos_Salvos", data=pd.concat([df_hist, novo_reg], ignore_index=True))
                     st.success("Orçamento salvo!")
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
@@ -235,24 +213,9 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
             for i, row in df_salvos.iterrows():
-                # Adicionado coluna para o botão de editar
-                c1, c2, c3, c4, c_edit, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5, 0.5])
+                c1, c2, c3, c4, c5 = st.columns([1.5, 2, 2.5, 1.5, 0.5])
                 c1.write(row.get('Data', '')); c2.write(row.get('Cliente', ''))
                 c3.write(row.get('Pedido', '')); c4.write(row.get('Valor_Final', ''))
-                
-                # BOTÃO EDITAR
-                if c_edit.button("📝", key=f"edit_h_{i}"):
-                    try:
-                        # Carrega os dados salvos de volta para o estado da sessão
-                        itens_recuperados = json.loads(row.get('Detalhes_JSON', '[]'))
-                        st.session_state.carrinho_orc = itens_recuperados
-                        st.session_state.cli_orc = row.get('Cliente', '')
-                        st.session_state.grupo_orc = row.get('Pedido', '')
-                        st.success("Orçamento carregado para edição! Vá para a aba 'Criar Novo'.")
-                        st.rerun()
-                    except:
-                        st.error("Erro ao carregar detalhes.")
-                
                 if c5.button("🗑️", key=f"del_h_{i}"):
                     conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i)); st.rerun()
 
@@ -397,7 +360,19 @@ def main():
                     st.rerun()
 
     with res2:
-        st.markdown(f"<div class='resultado-box'><p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p><h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2><h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1><hr style='border-color: #4b5563;'><p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p><p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p><p>Custo Produção: R$ {custo_total_prod:.2f}</p></div>", unsafe_allow_html=True)
+        # CORREÇÃO DO ERRO AQUI: HTML separado em string multiline para evitar SyntaxError
+        html_resultado = f"""
+        <div class='resultado-box'>
+            <p style='margin:0; font-size:14px; opacity: 0.8;'>VALOR SUGERIDO</p>
+            <h2 style='margin:0;'>TOTAL ({forma_pagamento})</h2>
+            <h1 style='color: #60a5fa !important; font-size:48px;'>R$ {preco_venda_final:.2f}</h1>
+            <hr style='border-color: #4b5563;'>
+            <p><b>Lucro Líquido:</b> <span style='color: #4ade80;'>R$ {lucro_valor:.2f}</span></p>
+            <p><b>CMV:</b> <span style='color: {cor_cmv}; font-weight: bold;'>{cmv_percentual:.1f}%</span></p>
+            <p>Custo Produção: R$ {custo_total_prod:.2f}</p>
+        </div>
+        """
+        st.markdown(html_resultado, unsafe_allow_html=True)
 
     secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento)
 
