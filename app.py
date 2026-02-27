@@ -124,12 +124,17 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     st.markdown("<h2 class='titulo-planilha'>📋 Gerador de Orçamentos</h2>", unsafe_allow_html=True)
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
     with t1:
+        # Carregamento seguro de valores temporários para os campos
+        val_cli = st.session_state.get("temp_cliente", "")
+        val_ped = st.session_state.get("temp_pedido", "")
+
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
-        nome_cliente = c_cli1.text_input("Nome do Cliente", key="cli_orc")
+        nome_cliente = c_cli1.text_input("Nome do Cliente", value=val_cli, key="cli_orc")
         tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
         data_orc = c_cli3.date_input("Data", value=date.today(), key="data_orc")
-        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", key="grupo_orc")
+        nome_grupo_pedido = st.text_input("Nome do Produto/Grupo", value=val_ped, key="grupo_orc")
         st.write("---")
+        
         c_it1, c_it2 = st.columns([3, 1])
         item_escolhido = c_it1.selectbox("Selecione o Item:", options=[""] + df_ing['nome'].tolist(), key="sel_orc_it")
         qtd_orc = c_it2.number_input("Qtd", min_value=1, value=1, key="q_orc_input")
@@ -212,7 +217,10 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                     st.success("Orçamento salvo!")
             if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
                 st.session_state.carrinho_orc = []
+                st.session_state["temp_cliente"] = ""
+                st.session_state["temp_pedido"] = ""
                 st.rerun()
+
     with t2:
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
@@ -225,13 +233,12 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 
                 if c5.button("📝", key=f"edit_h_{i}"):
                     try:
-                        # Limpa aspas simples que o GSheets às vezes coloca
+                        # Carregamento seguro para evitar erro de widget instanciado
                         raw_json = row.get('Itens_JSON', '[]').replace("'", '"')
                         st.session_state.carrinho_orc = json.loads(raw_json)
-                        # Atualiza o state usando a chave para evitar conflito com widgets já instanciados
-                        st.session_state["cli_orc"] = row.get('Cliente', '')
-                        st.session_state["grupo_orc"] = row.get('Pedido', '')
-                        st.success("Carregado! Vá para a aba 'Criar Novo'.")
+                        st.session_state["temp_cliente"] = row.get('Cliente', '')
+                        st.session_state["temp_pedido"] = row.get('Pedido', '')
+                        st.success("Carregado! Clique na aba 'Criar Novo'.")
                         st.rerun()
                     except:
                         st.error("Erro ao carregar itens deste orçamento.")
@@ -381,7 +388,7 @@ def main():
                     st.rerun()
 
     with res2:
-        # CORREÇÃO: Usando chaves duplas {{ }} para escapar o estilo CSS dentro da f-string
+        # CORREÇÃO DEFINITIVA DO OPACITY USANDO {{ }}
         st.markdown(f"""
             <div class='resultado-box'>
                 <p style='margin:0; font-size:14px; {{ opacity: 0.8; }}'>VALOR SUGERIDO</p>
