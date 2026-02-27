@@ -125,10 +125,9 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
     t1, t2 = st.tabs(["🆕 Criar Novo", "📂 Salvos"])
     
     with t1:
-        # Indentação corrigida aqui
         val_cli = st.session_state.get("temp_cliente", "")
         val_ped = st.session_state.get("temp_pedido", "")
-
+        
         c_cli1, c_cli2, c_cli3 = st.columns([2, 1, 1])
         nome_cliente = c_cli1.text_input("Nome do Cliente", value=val_cli, key="cli_orc")
         tel_cliente = c_cli2.text_input("Telefone", key="tel_orc")
@@ -198,7 +197,6 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                 </div>
                 """, unsafe_allow_html=True)
 
-            st.write("")
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
             b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
@@ -239,8 +237,8 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
                         st.session_state["temp_pedido"] = row.get('Pedido', '')
                         st.success("Carregado! Clique na aba 'Criar Novo'.")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao carregar: {e}")
+                    except:
+                        st.error("Erro ao carregar itens.")
 
                 if c6.button("🗑️", key=f"del_h_{i}"):
                     conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i))
@@ -387,7 +385,6 @@ def main():
                     st.rerun()
 
     with res2:
-        # CORREÇÃO: Usando chaves duplas {{ }} para o CSS não quebrar a f-string do Python
         st.markdown(f"""
             <div class='resultado-box'>
                 <p style='margin:0; font-size:14px; {{ opacity: 0.8; }}'>VALOR SUGERIDO</p>
