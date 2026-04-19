@@ -56,11 +56,10 @@ if "n_itens_receita" not in st.session_state:
     st.session_state.n_itens_receita = 1
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
-# NOVO ESTADO PARA CONTROLE DE EDIÇÃO
 if "editando_orc" not in st.session_state:
-    st.session_state.editando_orc = None
-if "edit_index" not in st.session_state:
-    st.session_state.edit_index = None
+    st.session_state.editando_orc = False
+if "edit_index_orc" not in st.session_state:
+    st.session_state.edit_index_orc = None
 
 # --- FUNÇÕES DE CARREGAMENTO COM CACHE ---
 @st.cache_data(ttl=60)
@@ -117,7 +116,7 @@ def exportar_pdf(cliente, pedido, itens, total):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def adicionar_ao_carrinho():
-    pass  # Implementar conforme necessidade
+    pass
 
 @st.fragment
 def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
@@ -140,9 +139,8 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
         with col2:
             nome_grupo_pedido = st.text_input("Nome do Pedido/Grupo", key="grupo_orc")
         
-        # MOSTRAR INDICADOR DE EDIÇÃO
         if st.session_state.editando_orc:
-            st.info(f"✏️ Editando orçamento: {st.session_state.editando_orc}")
+            st.info(f"✏️ Editando orçamento - Faça as alterações e clique em Salvar")
         
         if not st.session_state.carrinho_orc:
             st.info("Adicione itens usando o formulário acima.")
@@ -215,12 +213,12 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
             data_orc = date.today()
             itens_json = json.dumps(st.session_state.carrinho_orc)
             
-            # SE ESTIVER EDITANDO, REMOVE O REGISTRO ANTIGO
-            if st.session_state.edit_index is not None:
-                df_hist = df_hist.drop(st.session_state.edit_index)
-                # RESETA O ESTADO DE EDIÇÃO
-                st.session_state.editando_orc = None
-                st.session_state.edit_index = None
+            # Se estiver editando, remove o registro antigo
+            if st.session_state.editando_orc and st.session_state.edit_index_orc is not None:
+                df_hist = df_hist.drop(st.session_state.edit_index_orc)
+                # Reseta os flags de edição
+                st.session_state.editando_orc = False
+                st.session_state.edit_index_orc = None
             
             novo_reg = pd.DataFrame([{
                 "Data": data_orc.strftime("%d/%m/%Y"), 
@@ -235,35 +233,39 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
         
         if b_col3.button("🗑️ Limpar Pedido", use_container_width=True):
             st.session_state.carrinho_orc = []
-            st.session_state.editando_orc = None
-            st.session_state.edit_index = None
+            st.session_state.editando_orc = False
+            st.session_state.edit_index_orc = None
             st.rerun()
     
     with t2:
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
-            for i, row in df_salvos.iterrows():
-                # ADICIONADA UMA COLUNA A MAIS PARA O BOTÃO EDITAR
+            # Reset do índice para exibição
+            df_salvos_reset = df_salvos.reset_index(drop=True)
+            for i, row in df_salvos_reset.iterrows():
                 c1, c2, c3, c4, c5, c6 = st.columns([1.5, 1.5, 2, 1.5, 0.4, 0.4])
                 c1.write(row.get('Data', ''))
                 c2.write(row.get('Cliente', ''))
                 c3.write(row.get('Pedido', ''))
                 c4.write(row.get('Valor_Final', ''))
                 
-                # BOTÃO EDITAR (LÁPIS)
-                if c5.button("✏️", key=f"edit_h_{i}"):
-                    st.session_state.carregar_orc_dados = {
-                        "cliente": row.get('Cliente', ''), 
-                        "pedido": row.get('Pedido', ''), 
-                        "itens": json.loads(row.get('Itens_JSON', '[]'))
-                    }
-                    st.session_state.editando_orc = row.get('Pedido', '')
-                    st.session_state.edit_index = i
+                # Botão Editar
+                if c5.button("✏️", key=f"edit_{i}"):
+                    # Carrega os dados do orçamento para edição
+                    itens_carregados = json.loads(row.get('Itens_JSON', '[]'))
+                    st.session_state.carrinho_orc = itens_carregados
+                    st.session_state.cli_orc = row.get('Cliente', '')
+                    st.session_state.grupo_orc = row.get('Pedido', '')
+                    st.session_state.editando_orc = True
+                    st.session_state.edit_index_orc = i
+                    st.success(f"Editando orçamento: {row.get('Pedido', '')}")
                     st.rerun()
                 
-                # BOTÃO DELETAR (LIXEIRA)
-                if c6.button("🗑️", key=f"del_h_{i}"):
-                    conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i))
+                # Botão Deletar
+                if c6.button("🗑️", key=f"del_{i}"):
+                    df_atualizado = df_salvos_reset.drop(i).reset_index(drop=True)
+                    conn.update(worksheet="Orcamentos_Salvos", data=df_atualizado)
+                    st.success("Orçamento deletado!")
                     st.rerun()
 
 def main():
