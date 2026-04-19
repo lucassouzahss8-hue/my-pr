@@ -56,9 +56,6 @@ if "n_itens_receita" not in st.session_state:
     st.session_state.n_itens_receita = 1
 if "versao_lista" not in st.session_state:
     st.session_state.versao_lista = 0
-# Estado para controlar se é a primeira execução
-if "primeira_execucao" not in st.session_state:
-    st.session_state.primeira_execucao = True
 
 # --- FUNÇÕES DE CARREGAMENTO COM CACHE ---
 @st.cache_data(ttl=60)
@@ -115,7 +112,7 @@ def exportar_pdf(cliente, pedido, itens, total):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def adicionar_ao_carrinho():
-    pass
+    pass  # Implementar conforme necessidade
 
 @st.fragment
 def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
@@ -261,7 +258,6 @@ def main():
                     st.session_state[f"qtd_{idx}"] = row['qtd']
                     st.session_state[f"u_{idx}"] = row['unid']
                 st.session_state.versao_lista += 1
-                st.session_state.primeira_execucao = False
                 st.success(f"Receita '{receita_selecionada}' carregada!")
                 st.rerun()
         with col_rec3:
@@ -296,71 +292,21 @@ def main():
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    # Se for primeira execução, não carrega nenhum valor
-                    if st.session_state.primeira_execucao:
-                        val_nome = None
-                        idx_nome = 0
-                    else:
-                        val_nome = st.session_state.get(f"nome_{i}")
-                        idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
-                    
-                    escolha = st.selectbox(
-                        f"Item {i+1}", 
-                        options=[""] + lista_nomes,  # Adiciona opção vazia no início
-                        index=0 if st.session_state.primeira_execucao or val_nome is None else idx_nome + 1,
-                        key=f"nome_{i}_{st.session_state.versao_lista}"
-                    )
-                    st.session_state[f"nome_{i}"] = escolha if escolha != "" else None
-                
-                # Se nenhum ingrediente foi selecionado, pula o resto
-                if escolha == "":
-                    with c2:
-                        st.number_input(f"Qtd", value=None, key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01, disabled=True)
-                    with c3:
-                        st.selectbox(f"Unid", options=[""], disabled=True, key=f"u_{i}_{st.session_state.versao_lista}")
-                    with c4:
-                        st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ 0.00</p>", unsafe_allow_html=True)
-                    with c5:
-                        if st.button("❌", key=f"del_ing_man_{i}"):
-                            st.session_state.n_itens_receita -= 1
-                            st.session_state.versao_lista += 1 
-                            st.rerun()
-                    continue
+                    val_nome = st.session_state.get(f"nome_{i}")
+                    idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
+                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_nome, key=f"nome_{i}_{st.session_state.versao_lista}")
+                    st.session_state[f"nome_{i}"] = escolha
                 
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
-                    # Quantidade começa vazia
-                    if st.session_state.primeira_execucao:
-                        qtd_usada = None
-                    else:
-                        qtd_usada = st.session_state.get(f"qtd_{i}", None)
-                    
-                    qtd_usada = st.number_input(
-                        f"Qtd", 
-                        value=None if qtd_usada == 0 or qtd_usada is None else qtd_usada,
-                        key=f"qtd_{i}_{st.session_state.versao_lista}", 
-                        step=0.01,
-                        format="%.2f"
-                    )
-                    if qtd_usada is None:
-                        qtd_usada = 0.0
+                    val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
+                    qtd_usada = st.number_input(f"Qtd", value=val_qtd, key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01)
                     st.session_state[f"qtd_{i}"] = qtd_usada
-                
                 with c3:
                     unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                    if st.session_state.primeira_execucao:
-                        val_unid = None
-                        idx_unid = 0
-                    else:
-                        val_unid = st.session_state.get(f"u_{i}")
-                        idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
-                    
-                    unid_uso = st.selectbox(
-                        f"Unid", 
-                        options=unid_opcoes, 
-                        index=idx_unid, 
-                        key=f"u_{i}_{st.session_state.versao_lista}"
-                    )
+                    val_unid = st.session_state.get(f"u_{i}")
+                    idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
+                    unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"u_{i}_{st.session_state.versao_lista}")
                     st.session_state[f"u_{i}"] = unid_uso
                 
                 fator = 1.0
@@ -423,7 +369,6 @@ def main():
                     df_final = df_nova
                 conn.update(worksheet="Receitas", data=df_final)
                 st.success(f"Receita '{nome_produto_final}' salva!")
-                st.session_state.primeira_execucao = False
                 st.rerun()
             else:
                 st.warning("Digite um nome para o produto antes de salvar!")
