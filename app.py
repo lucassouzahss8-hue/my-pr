@@ -423,19 +423,19 @@ def main():
                 with c5:
                     st.write("")
                     if st.button("❌", key=f"del_ing_man_{i}"):
-    for j in range(i, st.session_state.n_itens_receita - 1):
-        st.session_state[f"nome_{j}"] = st.session_state.get(f"nome_{j+1}")
-        st.session_state[f"qtd_{j}"] = st.session_state.get(f"qtd_{j+1}", 0.0)
-        st.session_state[f"u_{j}"] = st.session_state.get(f"u_{j+1}")
+                        for j in range(i, st.session_state.n_itens_receita - 1):
+                            st.session_state[f"nome_{j}"] = st.session_state.get(f"nome_{j+1}")
+                            st.session_state[f"qtd_{j}"] = st.session_state.get(f"qtd_{j+1}", 0.0)
+                            st.session_state[f"u_{j}"] = st.session_state.get(f"u_{j+1}")
 
-    ultimo = st.session_state.n_itens_receita - 1
-    st.session_state.pop(f"nome_{ultimo}", None)
-    st.session_state.pop(f"qtd_{ultimo}", None)
-    st.session_state.pop(f"u_{ultimo}", None)
-
-    st.session_state.n_itens_receita -= 1
-    st.session_state.versao_lista += 1
-    st.rerun()
+                        ultimo = st.session_state.n_itens_receita - 1
+                        st.session_state.pop(f"nome_{ultimo}", None)
+                        st.session_state.pop(f"qtd_{ultimo}", None)
+                        st.session_state.pop(f"u_{ultimo}", None)
+                        
+                        st.session_state.n_itens_receita -= 1
+                        st.session_state.versao_lista += 1
+                        st.rerun()
     
     with col_dir:
         st.subheader("⚙️ Adicionais")
