@@ -7,18 +7,12 @@ import json
 import uuid
 
 # 1. Configuração da Página
-st.set_page_config(
-    page_title="Precificador", 
-    page_icon="📊", 
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="Precificador", page_icon="📊", layout="wide", initial_sidebar_state="collapsed")
 
 # 2. Estilização CSS
 st.markdown("""
     <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;} footer {visibility: hidden;}
     .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; text-align: center; }
     .resultado-box { background-color: #262730; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 15px rgba(0,0,0,0.3); color: white; }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
@@ -28,19 +22,12 @@ st.markdown("""
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# --- FUNÇÕES DE CALLBACK (A CHAVE PARA NÃO SUMIR) ---
-def atualizar_item(id_item, campo, valor):
-    """Atualiza o ingrediente na lista sem resetar a tela."""
-    for item in st.session_state.lista_ingredientes:
-        if item['id'] == id_item:
-            item[campo] = valor
-
-# Inicialização de estados
+# --- INICIALIZAÇÃO DE ESTADOS ---
 if "carrinho_orc" not in st.session_state: st.session_state.carrinho_orc = []
 if "lista_ingredientes" not in st.session_state: 
     st.session_state.lista_ingredientes = [{"id": str(uuid.uuid4()), "nome": "", "qtd": 0.0, "unid": "g"}]
 
-# Funções de carregamento
+# Funções de Carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
@@ -268,81 +255,64 @@ def main():
             
         lista_para_salvar = []
         if not df_ing.empty:
+            # --- LOOP DE RENDERIZAÇÃO ---
             for item in st.session_state.lista_ingredientes:
                 item_id = item['id']
-                
-                # Garante que os valores iniciais existam no state
-                if f"nome_{item_id}" not in st.session_state: st.session_state[f"nome_{item_id}"] = item['nome']
-                if f"qtd_{item_id}" not in st.session_state: st.session_state[f"qtd_{item_id}"] = float(item['qtd'])
-                if f"unid_{item_id}" not in st.session_state: st.session_state[f"unid_{item_id}"] = item['unid']
+                key_nome = f"nome_{item_id}"
+                key_qtd = f"qtd_{item_id}"
+                key_unid = f"unid_{item_id}"
+
+                # Inicializa chaves no session_state para evitar KeyError
+                if key_nome not in st.session_state: st.session_state[key_nome] = item['nome']
+                if key_qtd not in st.session_state: st.session_state[key_qtd] = float(item['qtd'])
+                if key_unid not in st.session_state: st.session_state[key_unid] = item['unid']
 
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    # Seleciona o index baseado no valor atual do state
-                    idx_nome = lista_nomes.index(st.session_state[f"nome_{item_id}"]) if st.session_state[f"nome_{item_id}"] in lista_nomes else 0
-                    st.selectbox(
-                        "Item", 
-                        options=lista_nomes, 
-                        index=idx_nome, 
-                        key=f"nome_{item_id}", 
-                        label_visibility="collapsed"
-                    )
+                    idx_nome = lista_nomes.index(st.session_state[key_nome]) if st.session_state[key_nome] in lista_nomes else 0
+                    st.selectbox("Item", options=lista_nomes, index=idx_nome, key=key_nome, label_visibility="collapsed")
                 
-                # Pega os valores atualizados do widget diretamente do state
-                nome_escolhido = st.session_state[f"nome_{item_id}"]
-                qtd_usada = st.session_state[f"qtd_{item_id}"]
-                unid_uso = st.session_state[f"unid_{item_id}"]
+                # Leitura direta do state (o valor mais atualizado)
+                nome_escolhido = st.session_state[key_nome]
+                qtd_usada = st.session_state[key_qtd]
+                unid_uso = st.session_state[key_unid]
 
                 if nome_escolhido in df_ing['nome'].values:
                     dados_item = df_ing[df_ing['nome'] == nome_escolhido].iloc[0]
                     
                     with c2:
-                        st.number_input(
-                            "Qtd", 
-                            value=float(qtd_usada), 
-                            key=f"qtd_{item_id}", 
-                            step=0.01,
-                            label_visibility="collapsed"
-                        )
+                        st.number_input("Qtd", value=float(qtd_usada), key=key_qtd, step=0.01, label_visibility="collapsed")
                     
                     with c3:
                         unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
                         idx_u = unid_opcoes.index(unid_uso) if unid_uso in unid_opcoes else 0
-                        st.selectbox(
-                            "Unid", 
-                            options=unid_opcoes, 
-                            index=idx_u, 
-                            key=f"unid_{item_id}", 
-                            label_visibility="collapsed"
-                        )
+                        st.selectbox("Unid", options=unid_opcoes, index=idx_u, key=key_unid, label_visibility="collapsed")
                     
-                    # Recalcula valores usando o que está nos widgets
+                    # Cálculo
                     fator = 1.0
                     u_base = str(dados_item['unidade']).lower().strip()
-                    qtd_final = st.session_state[f"qtd_{item_id}"] # Pega o valor atualizado
-                    u_final = st.session_state[f"unid_{item_id}"]
+                    if unid_uso == "g" and u_base == "kg": fator = 1/1000
+                    elif unid_uso == "kg" and u_base == "g": fator = 1000
+                    elif unid_uso == "ml" and u_base == "l": fator = 1/1000
                     
-                    if u_final == "g" and u_base == "kg": fator = 1/1000
-                    elif u_final == "kg" and u_base == "g": fator = 1000
-                    elif u_final == "ml" and u_base == "l": fator = 1/1000
-                    
-                    custo_parcial = (qtd_final * fator) * float(dados_item['preco'])
+                    custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
                     custo_ingredientes_total += custo_parcial
-                    lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": nome_escolhido, "qtd": qtd_final, "unid": u_final})
+                    lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": nome_escolhido, "qtd": qtd_usada, "unid": unid_uso})
                     
                     with c4:
                         st.markdown(f"<p style='padding-top:5px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 
                 with c5:
                     if st.button("❌", key=f"del_{item_id}"):
-                        # Remove do state e do layout
+                        # Limpa os dados do session state antes de remover
                         st.session_state.lista_ingredientes = [i for i in st.session_state.lista_ingredientes if i['id'] != item_id]
-                        del st.session_state[f"nome_{item_id}"]
-                        del st.session_state[f"qtd_{item_id}"]
-                        del st.session_state[f"unid_{item_id}"]
+                        del st.session_state[key_nome]
+                        del st.session_state[key_qtd]
+                        del st.session_state[key_unid]
                         st.rerun()
+
     with col_dir:
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
