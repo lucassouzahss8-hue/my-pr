@@ -78,7 +78,7 @@ def carregar_historico_orc():
     try:
         df = conn.read(worksheet="Orcamentos_Salvos", ttl=1)
         if df is not None:
-            df.columns = [str(c).replace(" ", "_") for c in df.columns]
+            df.columns = [c.replace(" ", "_") for c in df.columns]
             if 'Itens_JSON' not in df.columns:
                 df['Itens_JSON'] = "[]"
             return df
@@ -110,13 +110,11 @@ def exportar_pdf(cliente, pedido, itens, total):
     pdf.ln(5)
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(200, 10, f"TOTAL FINAL: R$ {total:.2f}", ln=True, align='R')
-    # FIX 1: fpdf2 retorna bytearray; bytes() garante compatibilidade com st.download_button
-    return bytes(pdf.output(dest='S'))
+    return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def adicionar_ao_carrinho():
-    # FIX 2: usar .get() evita AttributeError se a key ainda não existir no session_state
-    nome = st.session_state.get("sel_orc_it", "")
-    qtd = st.session_state.get("q_orc_input", 1)
+    nome = st.session_state.sel_orc_it
+    qtd = st.session_state.q_orc_input
     if nome != "":
         df_ing = carregar_ingredientes()
         p_unit_puro = float(df_ing[df_ing['nome'] == nome]['preco'].iloc[0])
@@ -199,7 +197,7 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
 
             b_col1, b_col2, b_col3 = st.columns(3)
             pdf_bytes = exportar_pdf(nome_cliente, nome_grupo_pedido, lista_pdf, total_geral_orc)
-            b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name="Orcamento.pdf", mime="application/pdf", use_container_width=True)
+            b_col1.download_button(label="📄 Gerar Pdf", data=pdf_bytes, file_name=f"Orcamento.pdf", use_container_width=True)
             if b_col2.button("💾 Salvar Orçamento", use_container_width=True):
                 df_hist = carregar_historico_orc()
                 itens_json = json.dumps(st.session_state.carrinho_orc)
@@ -219,14 +217,14 @@ def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
         df_salvos = carregar_historico_orc()
         if not df_salvos.empty:
             for i, row in df_salvos.iterrows():
+                # Removida coluna de edição, mantendo visualização e lixeira
                 c1, c2, c3, c4, c5 = st.columns([1.5, 1.5, 2, 1.5, 0.4])
                 c1.write(row.get('Data', ''))
                 c2.write(row.get('Cliente', ''))
                 c3.write(row.get('Pedido', ''))
                 c4.write(row.get('Valor_Final', ''))
                 if c5.button("🗑️", key=f"del_h_{i}"):
-                    # FIX 3: reset_index evita KeyError ao regravar após drop
-                    conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i).reset_index(drop=True))
+                    conn.update(worksheet="Orcamentos_Salvos", data=df_salvos.drop(i))
                     st.rerun()
 
 def main():
@@ -298,8 +296,7 @@ def main():
                 dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
                 with c2:
                     val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
-                    # FIX 4: float() garante que o value seja numérico, evitando TypeError
-                    qtd_usada = st.number_input(f"Qtd", value=float(val_qtd), key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01)
+                    qtd_usada = st.number_input(f"Qtd", value=val_qtd, key=f"qtd_{i}_{st.session_state.versao_lista}", step=0.01)
                     st.session_state[f"qtd_{i}"] = qtd_usada
                 with c3:
                     unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
@@ -321,8 +318,7 @@ def main():
                     st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 with c5:
                     st.write("")
-                    # FIX 5: key única por versao_lista evita DuplicateWidgetID ao rerenderizar
-                    if st.button("❌", key=f"del_ing_man_{i}_{st.session_state.versao_lista}"):
+                    if st.button("❌", key=f"del_ing_man_{i}"):
                         st.session_state.n_itens_receita -= 1
                         st.session_state.versao_lista += 1 
                         st.rerun()
