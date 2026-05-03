@@ -270,68 +270,79 @@ def main():
         if not df_ing.empty:
             for item in st.session_state.lista_ingredientes:
                 item_id = item['id']
+                
+                # Garante que os valores iniciais existam no state
+                if f"nome_{item_id}" not in st.session_state: st.session_state[f"nome_{item_id}"] = item['nome']
+                if f"qtd_{item_id}" not in st.session_state: st.session_state[f"qtd_{item_id}"] = float(item['qtd'])
+                if f"unid_{item_id}" not in st.session_state: st.session_state[f"unid_{item_id}"] = item['unid']
+
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
                 
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    # Seleciona o index baseado no valor salvo na session state
-                    idx_nome = lista_nomes.index(item['nome']) if item['nome'] in lista_nomes else 0
+                    # Seleciona o index baseado no valor atual do state
+                    idx_nome = lista_nomes.index(st.session_state[f"nome_{item_id}"]) if st.session_state[f"nome_{item_id}"] in lista_nomes else 0
                     st.selectbox(
                         "Item", 
                         options=lista_nomes, 
                         index=idx_nome, 
                         key=f"nome_{item_id}", 
-                        on_change=atualizar_item, 
-                        args=(item_id, 'nome', st.session_state[f"nome_{item_id}"]),
                         label_visibility="collapsed"
                     )
                 
-                escolha = item['nome']
-                if escolha in df_ing['nome'].values:
-                    dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
+                # Pega os valores atualizados do widget diretamente do state
+                nome_escolhido = st.session_state[f"nome_{item_id}"]
+                qtd_usada = st.session_state[f"qtd_{item_id}"]
+                unid_uso = st.session_state[f"unid_{item_id}"]
+
+                if nome_escolhido in df_ing['nome'].values:
+                    dados_item = df_ing[df_ing['nome'] == nome_escolhido].iloc[0]
                     
                     with c2:
                         st.number_input(
                             "Qtd", 
-                            value=float(item['qtd']), 
+                            value=float(qtd_usada), 
                             key=f"qtd_{item_id}", 
                             step=0.01,
-                            on_change=atualizar_item, 
-                            args=(item_id, 'qtd', st.session_state[f"qtd_{item_id}"]),
                             label_visibility="collapsed"
                         )
                     
                     with c3:
                         unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                        idx_u = unid_opcoes.index(item['unid']) if item['unid'] in unid_opcoes else 0
+                        idx_u = unid_opcoes.index(unid_uso) if unid_uso in unid_opcoes else 0
                         st.selectbox(
                             "Unid", 
                             options=unid_opcoes, 
                             index=idx_u, 
                             key=f"unid_{item_id}", 
-                            on_change=atualizar_item, 
-                            args=(item_id, 'unid', st.session_state[f"unid_{item_id}"]),
                             label_visibility="collapsed"
                         )
                     
+                    # Recalcula valores usando o que está nos widgets
                     fator = 1.0
                     u_base = str(dados_item['unidade']).lower().strip()
-                    if item['unid'] == "g" and u_base == "kg": fator = 1/1000
-                    elif item['unid'] == "kg" and u_base == "g": fator = 1000
-                    elif item['unid'] == "ml" and u_base == "l": fator = 1/1000
+                    qtd_final = st.session_state[f"qtd_{item_id}"] # Pega o valor atualizado
+                    u_final = st.session_state[f"unid_{item_id}"]
                     
-                    custo_parcial = (float(item['qtd']) * fator) * float(dados_item['preco'])
+                    if u_final == "g" and u_base == "kg": fator = 1/1000
+                    elif u_final == "kg" and u_base == "g": fator = 1000
+                    elif u_final == "ml" and u_base == "l": fator = 1/1000
+                    
+                    custo_parcial = (qtd_final * fator) * float(dados_item['preco'])
                     custo_ingredientes_total += custo_parcial
-                    lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": float(item['qtd']), "unid": item['unid']})
+                    lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": nome_escolhido, "qtd": qtd_final, "unid": u_final})
                     
                     with c4:
                         st.markdown(f"<p style='padding-top:5px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 
                 with c5:
                     if st.button("❌", key=f"del_{item_id}"):
+                        # Remove do state e do layout
                         st.session_state.lista_ingredientes = [i for i in st.session_state.lista_ingredientes if i['id'] != item_id]
+                        del st.session_state[f"nome_{item_id}"]
+                        del st.session_state[f"qtd_{item_id}"]
+                        del st.session_state[f"unid_{item_id}"]
                         st.rerun()
-
     with col_dir:
         st.subheader("⚙️ Adicionais")
         perc_quebra = st.slider("Quebra (%)", 0, 15, 2)
