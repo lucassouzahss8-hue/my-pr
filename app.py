@@ -14,16 +14,34 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 2. Estilizacao CSS
+# 2. Estilizacao CSS + PWA + Ajustes Mobile
 st.markdown("""
     <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .titulo-planilha { color: #1e3a8a; font-weight: bold; border-bottom: 2px solid #1e3a8a; margin-bottom: 20px; text-align: center; }
-    .resultado-box { background-color: #262730; padding: 25px; border-radius: 15px; border-left: 10px solid #1e3a8a; box-shadow: 2px 2px 15px rgba(0,0,0,0.3); color: white; }
+    .titulo-planilha { 
+        color: #1e3a8a; 
+        font-weight: bold; 
+        border-bottom: 2px solid #1e3a8a; 
+        margin-bottom: 20px; 
+        text-align: center;
+    }
+    .resultado-box { 
+        background-color: #262730; 
+        padding: 25px; 
+        border-radius: 15px; 
+        border-left: 10px solid #1e3a8a; 
+        box-shadow: 2px 2px 15px rgba(0,0,0,0.3); 
+        color: white; 
+    }
     .resultado-box h1, .resultado-box h2, .resultado-box p, .resultado-box b { color: white !important; }
+    
     @media (max-width: 640px) {
-        .stButton button { width: 100%; height: 48px; margin-bottom: 5px; }
+        .stButton button {
+            width: 100%;
+            height: 48px;
+            margin-bottom: 5px;
+        }
         .titulo-planilha { font-size: 24px; }
     }
     </style>
@@ -32,33 +50,42 @@ st.markdown("""
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # Inicializacao de estados
-if "carrinho_orc" not in st.session_state: st.session_state.carrinho_orc = []
-if "lista_ingredientes" not in st.session_state: st.session_state.lista_ingredientes = []
+if "carrinho_orc" not in st.session_state:
+    st.session_state.carrinho_orc = []
+
+# Nova estrutura para os ingredientes: uma lista de dicionários com IDs únicos
+if "lista_ingredientes" not in st.session_state:
+    st.session_state.lista_ingredientes = [{"id": str(uuid.uuid4()), "nome": "", "qtd": 0.0, "unid": "g"}]
 
 # Funções de carregamento
 def carregar_ingredientes():
     try:
         df = conn.read(worksheet="Ingredientes", ttl=1)
-        if df is None or df.empty: return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
+        if df is None or df.empty:
+            return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
         df.columns = [str(c).strip().lower() for c in df.columns]
         return df
-    except: return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
+    except:
+        return pd.DataFrame(columns=['nome', 'unidade', 'preco'])
 
 def carregar_receitas_nuvem():
     try:
         df = conn.read(worksheet="Receitas", ttl=1)
         return df if df is not None else pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
-    except: return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
+    except:
+        return pd.DataFrame(columns=['nome_receita', 'ingrediente', 'qtd', 'unid'])
 
 def carregar_historico_orc():
     try:
         df = conn.read(worksheet="Orcamentos_Salvos", ttl=1)
         if df is not None:
             df.columns = [c.replace(" ", "_") for c in df.columns]
-            if 'Itens_JSON' not in df.columns: df['Itens_JSON'] = "[]"
+            if 'Itens_JSON' not in df.columns:
+                df['Itens_JSON'] = "[]"
             return df
         return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final', 'Itens_JSON'])
-    except: return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final', 'Itens_JSON'])
+    except:
+        return pd.DataFrame(columns=['Data', 'Cliente', 'Pedido', 'Valor_Final', 'Itens_JSON'])
 
 def exportar_pdf(cliente, pedido, itens, total):
     pdf = FPDF()
@@ -91,8 +118,9 @@ def adicionar_ao_carrinho():
     qtd = st.session_state.q_orc_input
     if nome != "":
         df_ing = carregar_ingredientes()
-        p_unit_puro = float(df_ing[df_ing['nome'] == nome]['preco'].iloc[0])
-        st.session_state.carrinho_orc.append({"nome": nome, "qtd": qtd, "preco_puro": p_unit_puro})
+        if not df_ing.empty and nome in df_ing['nome'].values:
+            p_unit_puro = float(df_ing[df_ing['nome'] == nome]['preco'].iloc[0])
+            st.session_state.carrinho_orc.append({"nome": nome, "qtd": qtd, "preco_puro": p_unit_puro})
 
 @st.fragment
 def secao_orcamento(df_ing, margem_lucro, taxa_credito_input, forma_pagamento):
@@ -219,9 +247,11 @@ def main():
         with col_rec1:
             receita_selecionada = st.selectbox("Selecione uma receita:", [""] + receitas_nomes)
         with col_rec2:
+            st.write("") 
             if st.button("🔄 Carregar", use_container_width=True) and receita_selecionada != "":
                 dados_rec = df_rec[df_rec['nome_receita'] == receita_selecionada]
                 st.session_state.nome_prod_input = receita_selecionada
+                # Carregar receita: limpa a lista atual e preenche com os itens da receita salva
                 st.session_state.lista_ingredientes = []
                 for _, row in dados_rec.iterrows():
                     st.session_state.lista_ingredientes.append({
@@ -232,6 +262,7 @@ def main():
                     })
                 st.rerun()
         with col_rec3:
+            st.write("")
             if st.button("🗑️ Deletar", use_container_width=True) and receita_selecionada != "":
                 df_restante = df_rec[df_rec['nome_receita'] != receita_selecionada]
                 conn.update(worksheet="Receitas", data=df_restante)
@@ -260,25 +291,34 @@ def main():
             
         lista_para_salvar = []
         if not df_ing.empty:
+            # Iteramos sobre a lista que mantém o estado
             for i, item in enumerate(st.session_state.lista_ingredientes):
+                item_id = item['id'] # O UUID garante a estabilidade
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
-                item_id = item["id"]
                 
                 with c1:
                     lista_nomes = df_ing['nome'].tolist()
-                    idx_nome = lista_nomes.index(item['nome']) if item['nome'] in lista_nomes else 0
-                    escolha = st.selectbox(f"Item {i+1}", options=[""] + lista_nomes, index=idx_nome if item['nome'] else 0, key=f"nome_{item_id}")
+                    # Seleciona o item baseado no valor atual do state
+                    val_nome = item['nome']
+                    idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
+                    escolha = st.selectbox(f"Item {i+1}", options=lista_nomes, index=idx_nome, key=f"nome_select_{item_id}")
+                    # Atualiza o estado
                     st.session_state.lista_ingredientes[i]['nome'] = escolha
                 
-                if escolha and escolha in df_ing['nome'].values:
+                # Buscamos dados do ingrediente
+                if escolha in df_ing['nome'].values:
                     dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
+                    
                     with c2:
-                        qtd_usada = st.number_input(f"Qtd", value=float(item['qtd']), key=f"qtd_{item_id}", step=0.01)
+                        val_qtd = item['qtd']
+                        qtd_usada = st.number_input(f"Qtd", value=float(val_qtd), key=f"qtd_input_{item_id}", step=0.01)
                         st.session_state.lista_ingredientes[i]['qtd'] = qtd_usada
+                    
                     with c3:
                         unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                        idx_unid = unid_opcoes.index(item['unid']) if item['unid'] in unid_opcoes else 0
-                        unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"u_{item_id}")
+                        val_unid = item['unid']
+                        idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
+                        unid_uso = st.selectbox(f"Unid", options=unid_opcoes, index=idx_unid, key=f"unid_select_{item_id}")
                         st.session_state.lista_ingredientes[i]['unid'] = unid_uso
                     
                     fator = 1.0
@@ -290,12 +330,13 @@ def main():
                     custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
                     custo_ingredientes_total += custo_parcial
                     lista_para_salvar.append({"nome_receita": nome_produto_final, "ingrediente": escolha, "qtd": qtd_usada, "unid": unid_uso})
+                    
                     with c4:
                         st.markdown(f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>", unsafe_allow_html=True)
                 
                 with c5:
                     st.write("")
-                    if st.button("❌", key=f"del_{item_id}"):
+                    if st.button("❌", key=f"del_btn_{item_id}"):
                         st.session_state.lista_ingredientes.pop(i)
                         st.rerun()
 
