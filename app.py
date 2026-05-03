@@ -342,100 +342,104 @@ def main():
     col_esq, col_dir = st.columns([2, 1])
 
     with col_esq:
-        st.subheader("🛒 Ingredientes")
-        n_itens = st.number_input(
-            "Número de itens:",
-            min_value=1,
-            value=st.session_state.n_itens_receita,
-            key=f"n_itens_widget_{st.session_state.versao_lista}"
-        )
-        st.session_state.n_itens_receita = n_itens
+    st.subheader("🛒 Ingredientes")
+    n_itens = st.number_input(
+        "Número de itens:",
+        min_value=1,
+        value=st.session_state.n_itens_receita,
+        key=f"n_itens_widget_{st.session_state.versao_lista}"
+    )
+    st.session_state.n_itens_receita = n_itens
+    lista_para_salvar = []
 
-        if not df_ing.empty:
-            for i in range(st.session_state.n_itens_receita):
-                c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
+    if df_ing.empty:
+        st.warning("Nenhum ingrediente encontrado. Verifique a aba 'Ingredientes' da planilha.")
+    else:
+        for i in range(st.session_state.n_itens_receita):
+            c1, c2, c3, c4, c5 = st.columns([3, 1, 1, 1.5, 0.5])
 
-                with c1:
-                    lista_nomes = df_ing['nome'].tolist()
-                    val_nome = st.session_state.get(f"nome_{i}")
-                    idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
-                    escolha = st.selectbox(
-                        f"Item {i+1}",
-                        options=lista_nomes,
-                        index=idx_nome,
-                        key=f"nome_{i}_{st.session_state.versao_lista}"
-                    )
-                    st.session_state[f"nome_{i}"] = escolha
+            with c1:
+                lista_nomes = df_ing['nome'].tolist()
+                val_nome = st.session_state.get(f"nome_{i}")
+                idx_nome = lista_nomes.index(val_nome) if val_nome in lista_nomes else 0
+                escolha = st.selectbox(
+                    f"Item {i+1}",
+                    options=lista_nomes,
+                    index=idx_nome,
+                    key=f"nome_{i}_{st.session_state.versao_lista}"
+                )
+                st.session_state[f"nome_{i}"] = escolha
 
-                dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
+            dados_item = df_ing[df_ing['nome'] == escolha].iloc[0]
 
-                with c2:
-                    val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
-                    qtd_usada = st.number_input(
-                        "Qtd",
-                        value=val_qtd,
-                        key=f"qtd_{i}_{st.session_state.versao_lista}",
-                        step=0.01
-                    )
-                    st.session_state[f"qtd_{i}"] = qtd_usada
+            with c2:
+                val_qtd = st.session_state.get(f"qtd_{i}", 0.0)
+                qtd_usada = st.number_input(
+                    "Qtd",
+                    value=val_qtd,
+                    key=f"qtd_{i}_{st.session_state.versao_lista}",
+                    step=0.01
+                )
+                st.session_state[f"qtd_{i}"] = qtd_usada
 
-                with c3:
-                    unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
-                    val_unid = st.session_state.get(f"u_{i}")
-                    idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
-                    unid_uso = st.selectbox(
-                        "Unid",
-                        options=unid_opcoes,
-                        index=idx_unid,
-                        key=f"u_{i}_{st.session_state.versao_lista}"
-                    )
-                    st.session_state[f"u_{i}"] = unid_uso
+            with c3:
+                unid_opcoes = ["g", "kg", "ml", "L", "unidade"]
+                val_unid = st.session_state.get(f"u_{i}")
+                idx_unid = unid_opcoes.index(val_unid) if val_unid in unid_opcoes else 0
+                unid_uso = st.selectbox(
+                    "Unid",
+                    options=unid_opcoes,
+                    index=idx_unid,
+                    key=f"u_{i}_{st.session_state.versao_lista}"
+                )
+                st.session_state[f"u_{i}"] = unid_uso
 
-                fator = 1.0
-                u_base = str(dados_item['unidade']).lower().strip()
-                u_usada = str(unid_uso).lower().strip()
+            fator = 1.0
+            u_base = str(dados_item['unidade']).lower().strip()
+            u_usada = str(unid_uso).lower().strip()
 
-                if u_usada == "g" and u_base == "kg":
-                    fator = 1 / 1000
-                elif u_usada == "kg" and u_base == "g":
-                    fator = 1000
-                elif u_usada == "ml" and u_base == "l":
-                    fator = 1 / 1000
-                elif u_usada == "l" and u_base == "ml":
-                    fator = 1000
+            if u_usada == "g" and u_base == "kg":
+                fator = 1 / 1000
+            elif u_usada == "kg" and u_base == "g":
+                fator = 1000
+            elif u_usada == "ml" and u_base == "l":
+                fator = 1 / 1000
+            elif u_usada == "l" and u_base == "ml":
+                fator = 1000
 
-                custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
-                custo_ingredientes_total += custo_parcial
+            custo_parcial = (qtd_usada * fator) * float(dados_item['preco'])
+            custo_ingredientes_total += custo_parcial
 
-                lista_para_salvar.append({
-                    "nome_receita": nome_produto_final,
-                    "ingrediente": escolha,
-                    "qtd": qtd_usada,
-                    "unid": unid_uso
-                })
+            lista_para_salvar.append({
+                "nome_receita": nome_produto_final,
+                "ingrediente": escolha,
+                "qtd": qtd_usada,
+                "unid": unid_uso
+            })
 
-                with c4:
-                    st.markdown(
-                        f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>",
-                        unsafe_allow_html=True
-                    )
+            with c4:
+                st.markdown(
+                    f"<p style='padding-top:35px; font-weight:bold;'>R$ {custo_parcial:.2f}</p>",
+                    unsafe_allow_html=True
+                )
 
-                with c5:
-                    st.write("")
-                    if st.button("❌", key=f"del_ing_man_{i}"):
-                        for j in range(i, st.session_state.n_itens_receita - 1):
-                            st.session_state[f"nome_{j}"] = st.session_state.get(f"nome_{j+1}")
-                            st.session_state[f"qtd_{j}"] = st.session_state.get(f"qtd_{j+1}", 0.0)
-                            st.session_state[f"u_{j}"] = st.session_state.get(f"u_{j+1}")
+            with c5:
+                st.write("")
+                if st.button("❌", key=f"del_ing_man_{i}"):
+                    for j in range(i, st.session_state.n_itens_receita - 1):
+                        st.session_state[f"nome_{j}"] = st.session_state.get(f"nome_{j+1}")
+                        st.session_state[f"qtd_{j}"] = st.session_state.get(f"qtd_{j+1}", 0.0)
+                        st.session_state[f"u_{j}"] = st.session_state.get(f"u_{j+1}")
 
-                        ultimo = st.session_state.n_itens_receita - 1
-                        st.session_state.pop(f"nome_{ultimo}", None)
-                        st.session_state.pop(f"qtd_{ultimo}", None)
-                        st.session_state.pop(f"u_{ultimo}", None)
-                        
-                        st.session_state.n_itens_receita -= 1
-                        st.session_state.versao_lista += 1
-                        st.rerun()
+                    ultimo = st.session_state.n_itens_receita - 1
+                    st.session_state.pop(f"nome_{ultimo}", None)
+                    st.session_state.pop(f"qtd_{ultimo}", None)
+                    st.session_state.pop(f"u_{ultimo}", None)
+
+                    st.session_state.n_itens_receita -= 1
+                    st.session_state.versao_lista += 1
+                    st.rerun()
+
     
     with col_dir:
         st.subheader("⚙️ Adicionais")
